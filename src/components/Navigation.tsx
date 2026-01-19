@@ -185,7 +185,7 @@ export default function Navigation() {
           </nav>
 
           {/* Footer */}
-          <div className="p-6 border-t border-white/20">
+          <div className="p-6">
             <div className="text-xs text-white/60 text-center">
               © 2026 Armadillo Safety
             </div>
@@ -238,7 +238,7 @@ export default function Navigation() {
               </nav>
 
               {/* Footer */}
-              <div className="p-6 border-t border-white/20">
+              <div className="p-6">
                 <div className="text-xs text-white/60 text-center">
                   © 2026 Armadillo Safety
                 </div>
