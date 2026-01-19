@@ -1,0 +1,73 @@
+name,sku,quantity,updated_at,price,color,leadtime
+03dd4f62-d0d8-4224-8fc0-79728c1f2911,AA0111R9,,,69.5,Red,6-8 Weeks
+05b84f38-76de-4958-bbcf-1edf1c3f8a53,AF316BR9.5,45,,279.5,Black/Red,6-8 Weeks
+08aa9036-8152-4a86-a0fb-2c4ed0db9fd3,NGSAF,,,7.5,In stock,6-8 Weeks
+08aecff8-05bb-41a5-afba-69cdd3fc6b54,LS15,,,7.5,In stock,6-8 Weeks
+0fe53f31-4e0b-40ae-a076-ed149cf1484a,AA0111R11,,,69.5,Red,6-8 Weeks
+13661507-583d-47bd-b3ea-f708006c1b53,AACGB12,,,13.5,In stock,6-8 Weeks
+14a40c08-851b-4b94-8299-29b0978499ad,AA216BR10.5,9,,155.5,Black/Red,6-8 Weeks
+15607776-83c8-4171-a437-8ee9cbbcfb28,LS4,,,4.5,In stock,6-8 Weeks
+17bf6010-0e78-4fa5-bef0-7b25b9e4cccd,AF216BR9.5,,,185.5,Black/Red,6-8 Weeks
+1a607cee-0e33-4312-ae19-4dfd18918819,AAGSB30,,,39.5,In stock,6-8 Weeks
+1e20bab5-cdd9-440b-b106-480d5b1d6c0d,AA416BR8,11,,359.5,Black/Red,6-8 Weeks
+1f81dc3f-5f4e-407b-9999-18233a620290,AA0111R10.5,,,69.5,Red,6-8 Weeks
+1f81eeaf-91e0-496d-a4a1-8847cd6d5a92,AA0011B11,8,,59.5,Black,6-8 Weeks
+20deb9d7-35d3-4831-b0ac-c566df3db9b1,AA316BR10,18,,239.5,Black/Red,6-8 Weeks
+27903403-5675-46ab-90a3-012fbbbe65bf,AA216BR10,1,,155.5,Black/Red,6-8 Weeks
+280d6c94-44ef-4e4c-a3c1-36863dafb32f,AA0111R9.5,,,69.5,Red,6-8 Weeks
+291b798a-555e-4529-801a-4c455c696619,AA0111B8,18,,69.5,Black,6-8 Weeks
+2c5482aa-be82-4767-9d9c-aa1da1a305db,AF216BR10,,,185.5,Black/Red,6-8 Weeks
+2fd13491-9513-4e14-955b-6fcfc8946ab0,AA0111B10,39,,69.5,Black,6-8 Weeks
+30a2c8c8-e698-44a8-8540-12dc9f6478c2,AA416BR10,6,,359.5,Black/Red,6-8 Weeks
+390cd4ff-3b46-4271-9f61-02a6f8c92eba,AA0111R10,,,69.5,Red,6-8 Weeks
+3a807abd-53d8-40ad-a457-ccd8940cd4f8,AF216BR9,3,,185.5,Black/Red,6-8 Weeks
+3d1cec26-87a2-42be-8c5e-1c428458d921,AF316BR11,,,279.5,Black/Red,6-8 Weeks
+3e0901ad-d10c-45cc-910c-8ebb9c01b58d,AF216BR8,,,185.5,Black/Red,6-8 Weeks
+3f5092e4-8053-43bb-9c29-20f6bd29ca1c,AA416BR9.5,,,359.5,Black/Red,6-8 Weeks
+4619bece-eff4-4067-afe9-d0a018abec77,AF316BR8,,,279.5,Black/Red,6-8 Weeks
+4a1d2c82-3d18-4c7c-906d-6aa64311b6be,AA0111B9,50,,69.5,Black,6-8 Weeks
+4bf3d710-9dc4-4694-b13a-428f07baa359,AALP10,,,21.5,In stock,6-8 Weeks
+4c679da2-6922-4e1f-b072-7d12af39b272,AA0011R9,,,59.5,Red,6-8 Weeks
+4eb511d0-80c1-4c39-9138-498a6b3eb8f5,AA416BR9,,,359.5,Black/Red,6-8 Weeks
+4f7c3310-e746-44f0-8625-8f04f98cf5cd,AA0011B9,,,59.5,Black,6-8 Weeks
+5142f432-9fbb-4b2e-9858-3283c6632582,AF216BR10.5,41,,185.5,Black/Red,6-8 Weeks
+5842fb3a-6682-47a5-bc8b-606d89659a99,AA316BR9.5,1,,239.5,Black/Red,6-8 Weeks
+5c617086-8a72-4d17-887d-ff4ca93fad3a,AACGB20,,,27.5,In stock,6-8 Weeks
+5ccb5be7-b166-45c6-ab0f-5a7344807c5b,AA416BR11,6,,359.5,Black/Red,6-8 Weeks
+6245a0a2-c9d1-40e4-83f2-b206326cfcbd,AA316BR8,25,,239.5,Black/Red,6-8 Weeks
+687cb622-7465-4973-a7b9-8de8b3e97fe6,AA216BR9,1,,155.5,Black/Red,6-8 Weeks
+6b572e8c-7951-434d-99a2-28938de8e6c8,AA0011R8,,,59.5,Red,6-8 Weeks
+72524179-15af-4984-8fe0-c3248f719995,AA0011B10.5,,,59.5,Black,6-8 Weeks
+794496e7-2b2e-4ba1-af1b-88c7f6217110,AA0011R11,,,59.5,Red,6-8 Weeks
+8660e809-9396-49ca-b579-4926747dcf83,AA116BR10,2,,119.5,Black/Red,6-8 Weeks
+8d3765b5-a7d9-4708-84bf-06f0bad16be7,AF316BR10.5,35,,279.5,Black/Red,6-8 Weeks
+8e9b3d03-1f1c-46d6-9027-1b646143b63f,AA216BR9.5,,,155.5,Black/Red,6-8 Weeks
+9178bb98-2171-4b7e-b42e-afc2616a6183,AA116BR9.5,,,119.5,Black/Red,6-8 Weeks
+978efdf1-40f9-4796-94b3-00ca1ca36298,LS3,,,3.5,In stock,6-8 Weeks
+997dc265-317d-493f-81ba-ed2123cea9cf,AA0111B11,18,,69.5,Black,6-8 Weeks
+9f2c06f1-223c-4390-8bf1-b8b148ddd064,AA0011B9.5,,,59.5,Black,6-8 Weeks
+a35aa029-c79d-41e5-8896-b34461bfea82,AA0011R10.5,,,59.5,Red,6-8 Weeks
+a89f409a-35b1-484e-9ba2-945314991292,AF316BR9,40,,279.5,Black/Red,6-8 Weeks
+a98a1842-b0d0-4a9b-9535-c0815d6a1db9,AA316BR9,34,,239.5,Black/Red,6-8 Weeks
+ac814253-4fbd-4d65-8eff-64527fda6e34,AA0011R9.5,,,59.5,Red,6-8 Weeks
+acc75caa-a4e0-409f-adb4-fc3ec4897afe,AA116BR10.5,,,119.5,Black/Red,6-8 Weeks
+af3071df-f976-48e9-bb76-d3c6b054c190,AA216BR11,16,,155.5,Black/Red,6-8 Weeks
+b3d4195c-7db3-45e7-ba54-c5d372c34740,AA416BR10.5,,,359.5,Black/Red,6-8 Weeks
+bb456794-6289-4dd2-a51d-6245909148ff,AA0111B9.5,,,69.5,Black,6-8 Weeks
+bc0a1b50-19bd-42c4-b258-05046253dc76,AA116BR9,13,,119.5,Black/Red,6-8 Weeks
+bc1cae58-1b8e-4a76-9e6b-34fabcc52b5e,AF216BR11,6,,185.5,Black/Red,6-8 Weeks
+be3f8acb-a2e6-48bc-bf3f-db4911560129,AA116BR11,8,,119.5,Black/Red,6-8 Weeks
+be92ffda-280a-4ce8-bc0f-246700352362,AA0011R10,,,59.5,Red,6-8 Weeks
+c2d990ef-0140-428b-b566-b7845342284b,AA0111B10.5,,,69.5,Black,6-8 Weeks
+c3663bad-dd9e-42cc-8578-dd29a788da3e,AA116BR8,11,,119.5,Black/Red,6-8 Weeks
+c95aa195-bc58-45af-aa58-53ffcb208c60,AA0111R8,,,69.5,Red,6-8 Weeks
+cac6f8ea-47a3-4d19-859d-0aca3a4cfdfd,AA316BR10.5,19,,239.5,Black/Red,6-8 Weeks
+cae85bda-2786-4b97-b610-277eba0f7736,AA0011B10,7,,59.5,Black,6-8 Weeks
+cbcca17e-1163-4512-ba44-02ce88c398e9,AF316BR10,20,,279.5,Black/Red,6-8 Weeks
+e0031feb-3391-4be8-8ab9-4df7ee0f80d0,AA216BR8,10,,155.5,Black/Red,6-8 Weeks
+e649615a-1eb7-4c00-95f1-033a0192619f,LS5.5,,,5.5,In stock,6-8 Weeks
+ea47a848-4608-4aa4-b579-64ac6be5d263,AST-8,,,255.5,Low stock,6-8 Weeks
+ec4f152c-e15a-41f5-84fd-eff3de8164e5,AA316BR11,4,,239.5,Black/Red,6-8 Weeks
+ed6e1202-f339-4e49-a3aa-698ab9b047fe,AA0011B8,11,,59.5,Black,6-8 Weeks
+f65bd2d6-54ef-4a8b-9c8c-722aeaf5c788,AALP14,,,27.5,In stock,6-8 Weeks
+f81b8124-195b-4d85-b4ea-5e08b2ef68dc,ATHE-40,,,449.5,Low stock,6-8 Weeks
