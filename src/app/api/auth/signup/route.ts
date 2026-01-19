@@ -62,16 +62,39 @@ export async function POST(request: NextRequest) {
       .update(password)
       .digest('hex')
 
-    // Create user - use admin client if available (bypasses RLS), otherwise use regular client
-    const clientToUse = process.env.SUPABASE_SERVICE_ROLE_KEY ? supabaseAdmin : supabase
-    const { data: user, error: insertError } = await clientToUse
-      .from('users')
-      .insert({
-        email: email.toLowerCase().trim(),
-        password_hash: passwordHash,
-      })
-      .select('id, email')
-      .single()
+    // Create user - always try admin client first (bypasses RLS), fallback to regular client
+    // For server-side operations, admin client is preferred
+    let clientToUse = supabaseAdmin
+    let insertError = null
+    let user = null
+    
+    // Try with admin client first (if service role key is set)
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const result = await supabaseAdmin
+        .from('users')
+        .insert({
+          email: email.toLowerCase().trim(),
+          password_hash: passwordHash,
+        })
+        .select('id, email')
+        .single()
+      user = result.data
+      insertError = result.error
+    }
+    
+    // If admin client failed or isn't available, try regular client
+    if (insertError || !user) {
+      const result = await supabase
+        .from('users')
+        .insert({
+          email: email.toLowerCase().trim(),
+          password_hash: passwordHash,
+        })
+        .select('id, email')
+        .single()
+      user = result.data
+      insertError = result.error
+    }
 
     if (insertError) {
       console.error('Signup insert error:', JSON.stringify(insertError, null, 2))
