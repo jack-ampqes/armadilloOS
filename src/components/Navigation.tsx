@@ -14,6 +14,7 @@ import {
   Menu,
   QrCode,
   LogOut,
+  User,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -87,10 +88,19 @@ export default function Navigation() {
             <h1 className="text-lg font-bold text-white">Armadillo Safety</h1>
           </button>
           {showSignOut && (
-            <div className="absolute top-full left-0 mt-2 bg-[#181818] border border-white/20 rounded-lg shadow-lg z-50 min-w-[150px]">
+            <div className="absolute top-full left-0 mt-2 bg-[#181818] border border-white/20 rounded-lg shadow-lg z-50 min-w-[180px] overflow-hidden">
+              <Link
+                href="/profile"
+                onClick={() => setShowSignOut(false)}
+                className="w-full flex items-center space-x-2 px-4 py-3 text-white hover:bg-white/10 transition-colors"
+              >
+                <User className="w-4 h-4" />
+                <span>View Profile</span>
+              </Link>
+              <div className="border-t border-white/20" />
               <button
                 onClick={handleSignOut}
-                className="w-full flex items-center space-x-2 px-4 py-3 text-white hover:bg-white/10 transition-colors rounded-lg"
+                className="w-full flex items-center space-x-2 px-4 py-3 text-white hover:bg-red-500/10 transition-colors"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Sign Out</span>
@@ -127,10 +137,19 @@ export default function Navigation() {
               </div>
             </button>
             {showSignOut && (
-              <div className="absolute top-full left-6 mt-2 bg-[#181818] border border-white/20 rounded-lg shadow-lg z-50 min-w-[150px]">
+              <div className="absolute top-full left-6 mt-2 bg-[#181818] border border-white/20 rounded-lg shadow-lg z-50 min-w-[180px] overflow-hidden">
+                <Link
+                  href="/profile"
+                  onClick={() => setShowSignOut(false)}
+                  className="w-full flex items-center space-x-2 px-4 py-3 text-white hover:bg-white/10 transition-colors"
+                >
+                  <User className="w-4 h-4" />
+                  <span>View Profile</span>
+                </Link>
+                <div className="border-t border-white/20" />
                 <button
                   onClick={handleSignOut}
-                  className="w-full flex items-center space-x-2 px-4 py-3 text-white hover:bg-white/10 transition-colors rounded-lg"
+                  className="w-full flex items-center space-x-2 px-4 py-3 text-white hover:bg-red-500/10 transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>Sign Out</span>

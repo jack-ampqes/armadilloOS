@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
           email: email.toLowerCase().trim(),
           password_hash: passwordHash,
         })
-        .select('id, email')
+        .select('id, email, name, role')
         .single()
       user = result.data
       insertError = result.error
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
           email: email.toLowerCase().trim(),
           password_hash: passwordHash,
         })
-        .select('id, email')
+        .select('id, email, name, role')
         .single()
       user = result.data
       insertError = result.error
@@ -131,6 +131,8 @@ export async function POST(request: NextRequest) {
       user: {
         id: user.id,
         email: user.email,
+        name: user.name,
+        role: user.role || 'user',
       },
     })
   } catch (error) {

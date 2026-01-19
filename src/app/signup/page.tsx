@@ -56,6 +56,12 @@ export default function SignUpPage() {
       if (data.token) {
         localStorage.setItem('auth_token', data.token)
         localStorage.setItem('user_email', data.user.email)
+        if (data.user.name) {
+          localStorage.setItem('user_name', data.user.name)
+        }
+        if (data.user.role) {
+          localStorage.setItem('user_role', data.user.role)
+        }
       }
 
       // Redirect to dashboard

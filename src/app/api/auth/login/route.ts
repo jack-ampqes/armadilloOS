@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     // Query user from Supabase
     const { data: user, error } = await supabase
       .from('users')
-      .select('id, email, password_hash')
+      .select('id, email, password_hash, name, role')
       .eq('email', email.toLowerCase().trim())
       .single()
 
@@ -51,6 +51,8 @@ export async function POST(request: NextRequest) {
       user: {
         id: user.id,
         email: user.email,
+        name: user.name,
+        role: user.role || 'user',
       },
     })
   } catch (error) {
