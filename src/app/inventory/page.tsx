@@ -90,14 +90,57 @@ export default function InventoryPage() {
     try {
       if (dataSource === 'all') {
         // Fetch from both sources
-        const [localRes, shopifyRes] = await Promise.all([
-          fetch('/api/products'),
+        const [inventoryRes, shopifyRes] = await Promise.all([
+          fetch('/api/inventory'),
           fetch('/api/products?source=shopify').catch(() => ({ ok: false, status: 500, json: async () => ({ error: 'Network error' }) }))
         ])
         
-        const localProducts = localRes.ok ? await localRes.json() : []
-        let shopifyProducts: Product[] = []
+        // Transform inventory data from armadillo_inventory.inventory schema
+        let localProducts: Product[] = []
+        if (inventoryRes.ok) {
+          const inventoryData = await inventoryRes.json()
+          
+          // Debug: Log the first item to see structure
+          if (inventoryData.inventory && inventoryData.inventory.length > 0) {
+            console.log('Sample inventory item from API:', inventoryData.inventory[0])
+          }
+          
+          // inventoryData.inventory is an array of inventory items with product info
+          localProducts = (inventoryData.inventory || []).map((item: any) => {
+            const product = item.product || {}
+            
+            // Debug: Log if name is missing or looks like UUID
+            if (!product.name || product.name.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+              console.warn('Product name issue:', {
+                itemSku: item.sku,
+                productName: product.name,
+                itemName: item.name,
+                fullItem: item
+              })
+            }
+            
+            return {
+              id: item.sku,
+              name: product.name || item.name || 'Unknown Product',
+              description: product.description,
+              sku: item.sku,
+              price: product.price ? parseFloat(product.price) : (item.price ? parseFloat(item.price) : 0),
+              category: product.category,
+              color: product.color || item.color,
+              leadtime: product.leadtime || item.leadtime,
+              source: 'local' as const,
+              inventory: {
+                quantity: item.quantity ?? 0,
+                minStock: item.min_stock ?? item.minStock ?? 0,
+                location: item.location,
+                lastUpdated: item.updatedAt || item.updated_at,
+              },
+              orderItems: []
+            }
+          })
+        }
         
+        let shopifyProducts: Product[] = []
         if (shopifyRes.ok) {
           shopifyProducts = await shopifyRes.json()
         } else if (shopifyRes.status === 400) {
@@ -110,9 +153,8 @@ export default function InventoryPage() {
         const combined = [...localProducts, ...shopifyProducts]
         setAllProducts(combined)
         setDisplayedProducts(combined.slice(0, PRODUCTS_PER_PAGE))
-      } else {
-        const url = dataSource === 'shopify' ? '/api/products?source=shopify' : '/api/products'
-        const response = await fetch(url)
+      } else if (dataSource === 'shopify') {
+        const response = await fetch('/api/products?source=shopify')
         if (response.ok) {
           const data = await response.json()
           setAllProducts(data)
@@ -125,6 +167,58 @@ export default function InventoryPage() {
           setDisplayedProducts([])
         } else {
           console.error('Error fetching products:', response.status, response.statusText)
+          setAllProducts([])
+          setDisplayedProducts([])
+        }
+      } else {
+        // Local only - fetch from inventory API
+        const response = await fetch('/api/inventory')
+        if (response.ok) {
+          const inventoryData = await response.json()
+          
+          // Debug: Log the first item to see structure
+          if (inventoryData.inventory && inventoryData.inventory.length > 0) {
+            console.log('Sample inventory item from API (local only):', inventoryData.inventory[0])
+          }
+          
+          // Transform inventory data from armadillo_inventory.inventory schema
+          const transformedProducts = (inventoryData.inventory || []).map((item: any) => {
+            const product = item.product || {}
+            
+            // Debug: Log if name is missing or looks like UUID
+            if (!product.name || product.name.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+              console.warn('Product name issue:', {
+                itemSku: item.sku,
+                productName: product.name,
+                itemName: item.name,
+                fullItem: item
+              })
+            }
+            
+            return {
+              id: item.sku,
+              name: product.name || item.name || 'Unknown Product',
+              description: product.description,
+              sku: item.sku,
+              price: product.price ? parseFloat(product.price) : (item.price ? parseFloat(item.price) : 0),
+              category: product.category,
+              color: product.color || item.color,
+              leadtime: product.leadtime || item.leadtime,
+              source: 'local' as const,
+              inventory: {
+                quantity: item.quantity ?? 0,
+                minStock: item.min_stock ?? item.minStock ?? 0,
+                location: item.location,
+                lastUpdated: item.updatedAt || item.updated_at,
+              },
+              orderItems: []
+            }
+          })
+          setAllProducts(transformedProducts)
+          setDisplayedProducts(transformedProducts.slice(0, PRODUCTS_PER_PAGE))
+        } else {
+          const errorData = await response.json().catch(() => ({}))
+          console.error('Error fetching inventory:', response.status, response.statusText, errorData)
           setAllProducts([])
           setDisplayedProducts([])
         }
@@ -210,8 +304,9 @@ export default function InventoryPage() {
 
   const getTotalInventoryValue = () => {
     return allProducts.reduce((total, product) => {
-      const quantity = product.inventory?.quantity || 0
-      return total + (product.price * quantity)
+      const quantity = product.inventory?.quantity ?? 0
+      const price = product.price ?? 0
+      return total + (price * quantity)
     }, 0)
   }
 
@@ -452,11 +547,11 @@ export default function InventoryPage() {
                           </span>
                         </TableCell>
                         <TableCell className="text-white font-medium whitespace-nowrap">
-                          ${product.price.toFixed(2)}
+                          ${(product.price ?? 0).toFixed(2)}
                         </TableCell>
                         <TableCell className="text-white whitespace-nowrap">
-                          <span className="font-semibold">{product.inventory?.quantity || 0}</span>
-                          {product.inventory?.minStock && (
+                          <span className="font-semibold">{product.inventory?.quantity ?? 0}</span>
+                          {product.inventory?.minStock != null && product.inventory.minStock > 0 && (
                             <span className="text-xs text-white/50 ml-1 hidden xl:inline">
                               (min: {product.inventory.minStock})
                             </span>
