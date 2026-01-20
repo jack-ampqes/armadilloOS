@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { getProduct as getShopifyProduct } from '@/lib/shopify'
+import { parseSkuToProduct } from '@/lib/sku-parser'
 
 export async function GET(
   request: NextRequest,
@@ -85,44 +86,74 @@ export async function GET(
     // Local product - use SKU
     const sku = id
 
-    // Get product by SKU using RPC function (products are in armadillo_inventory schema)
-    const { data: productData, error: rpcError } = await supabase.rpc('get_product_by_sku', {
-      product_sku: sku
-    })
+    // Query inventory directly from armadillo_inventory.inventory table (same approach as inventory list)
+    const { data: inventoryData, error } = await supabase
+      .schema('armadillo_inventory')
+      .from('inventory')
+      .select('*')
+      .eq('sku', sku)
+      .single()
 
-    if (rpcError) throw rpcError
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // Not found
+        return NextResponse.json(
+          { error: 'Product not found' },
+          { status: 404 }
+        )
+      }
+      throw error
+    }
 
-    if (!productData || productData.length === 0) {
+    if (!inventoryData) {
       return NextResponse.json(
         { error: 'Product not found' },
         { status: 404 }
       )
     }
 
-    const product = productData[0]
+    // Generate product name from SKU (same logic as inventory API)
+    const skuValue = inventoryData.sku || ''
+    let productName = 'Unknown Product'
+    
+    // Check if DB name looks like a UUID (we should ignore those)
+    const dbName = inventoryData.name || inventoryData.product_name
+    const isUuid = dbName && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dbName)
+    
+    if (skuValue) {
+      const parsedSku = parseSkuToProduct(skuValue)
+      // Use SKU-generated name if valid, otherwise fallback
+      if (parsedSku.valid && parsedSku.title) {
+        productName = parsedSku.title
+      } else {
+        // If SKU parsing failed, try DB name (but not if it's a UUID) or use SKU as fallback
+        productName = (!isUuid && dbName) ? dbName : `Product ${skuValue}`
+      }
+    } else {
+      // No SKU found, use DB name (but not if it's a UUID) or generic
+      productName = (!isUuid && dbName) ? dbName : 'Unknown Product'
+    }
 
-    // Get inventory information if available using RPC function
-    const { data: inventoryData } = await supabase.rpc('get_inventory_by_sku', {
-      inventory_sku: sku
-    })
+    // Get parsed SKU for additional fields
+    const parsedSku = parseSkuToProduct(skuValue || '')
 
-    // Transform data to match expected format
+    // Transform data to match expected format (same structure as inventory list)
     const transformedProduct = {
-      id: product.sku, // Using SKU as ID
-      name: product.name,
-      description: product.description,
-      sku: product.sku,
-      price: parseFloat(product.price),
-      color: product.color || null,
-      leadtime: product.leadtime || null,
-      category: product.category || null,
-      source: 'local',
-      inventory: inventoryData && inventoryData.length > 0 ? {
-        quantity: inventoryData[0].quantity || 0,
-        minStock: inventoryData[0].min_stock || 0,
-        location: inventoryData[0].location || null,
-        lastUpdated: inventoryData[0].updated_at || null,
-      } : null
+      id: skuValue,
+      name: productName,
+      description: inventoryData.description || null,
+      sku: skuValue,
+      price: inventoryData.price ? parseFloat(inventoryData.price) : 0,
+      color: inventoryData.color || parsedSku.colorName || null,
+      leadtime: inventoryData.leadtime || null,
+      category: parsedSku.productType || inventoryData.category || null,
+      source: 'local' as const,
+      inventory: {
+        quantity: inventoryData.quantity ?? 0,
+        minStock: inventoryData.min_stock ?? inventoryData.minStock ?? 0,
+        location: inventoryData.location || null,
+        lastUpdated: inventoryData.updated_at || inventoryData.updatedAt || null,
+      }
     }
 
     return NextResponse.json(transformedProduct)

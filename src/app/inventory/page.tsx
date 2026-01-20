@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Pencil, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Plus, Pencil, AlertTriangle, RefreshCw, Minus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -11,6 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CirclePile, DollarSign, OctagonAlert, OctagonX } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface Product {
   id: string
@@ -49,6 +51,11 @@ export default function InventoryPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [page, setPage] = useState(1)
   const [dataSource, setDataSource] = useState<'local' | 'shopify' | 'all'>('all')
+  const [stockDialogOpen, setStockDialogOpen] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [quantityInput, setQuantityInput] = useState('')
+  const [updatingStock, setUpdatingStock] = useState(false)
+  const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 })
   const PRODUCTS_PER_PAGE = 50
 
   useEffect(() => {
@@ -310,6 +317,82 @@ export default function InventoryPage() {
     }, 0)
   }
 
+  const handleStockClick = (product: Product, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (product.source === 'shopify') {
+      // Don't allow editing Shopify stock from here
+      return
+    }
+    
+    // Get click position relative to viewport
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    let x = rect.left + rect.width / 2 // Center horizontally on the cell
+    let y = rect.top + rect.height + 8 // Position below the cell with small offset
+    
+    // Adjust position to keep popup within viewport
+    const popupWidth = 320 // w-80 = 320px
+    const popupHeight = 200 // approximate height
+    
+    // Adjust horizontal position if it would overflow
+    if (x - popupWidth / 2 < 8) {
+      x = popupWidth / 2 + 8
+    } else if (x + popupWidth / 2 > window.innerWidth - 8) {
+      x = window.innerWidth - popupWidth / 2 - 8
+    }
+    
+    // Adjust vertical position if it would overflow (show above instead)
+    if (y + popupHeight > window.innerHeight - 8) {
+      y = rect.top - popupHeight - 8
+    }
+    
+    setPopupPosition({ x, y })
+    setSelectedProduct(product)
+    setQuantityInput('')
+    setStockDialogOpen(true)
+  }
+
+  const handleStockUpdate = async (operation: 'add' | 'subtract') => {
+    if (!selectedProduct) return
+    
+    const quantity = parseInt(quantityInput) || 0
+    if (quantity <= 0) {
+      alert('Please enter a valid quantity greater than 0')
+      return
+    }
+
+    const adjustment = operation === 'add' ? quantity : -quantity
+    setUpdatingStock(true)
+
+    try {
+      const response = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sku: selectedProduct.sku,
+          quantity: adjustment,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to update stock')
+      }
+
+      // Refresh the products list
+      await fetchProducts()
+      setStockDialogOpen(false)
+      setQuantityInput('')
+      setSelectedProduct(null)
+    } catch (error) {
+      console.error('Error updating stock:', error)
+      alert(error instanceof Error ? error.message : 'Failed to update stock')
+    } finally {
+      setUpdatingStock(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="px-4 py-6 sm:px-0 max-w-7xl">
@@ -549,8 +632,16 @@ export default function InventoryPage() {
                         <TableCell className="text-white font-medium whitespace-nowrap">
                           ${(product.price ?? 0).toFixed(2)}
                         </TableCell>
-                        <TableCell className="text-white whitespace-nowrap">
-                          <span className="font-semibold">{product.inventory?.quantity ?? 0}</span>
+                        <TableCell 
+                          className="text-white whitespace-nowrap"
+                          onClick={(e) => handleStockClick(product, e)}
+                        >
+                          <span 
+                            className={`font-semibold ${product.source !== 'shopify' ? 'cursor-pointer hover:text-blue-400 transition-colors' : ''}`}
+                            title={product.source !== 'shopify' ? 'Click to adjust stock' : ''}
+                          >
+                            {product.inventory?.quantity ?? 0}
+                          </span>
                           {product.inventory?.minStock != null && product.inventory.minStock > 0 && (
                             <span className="text-xs text-white/50 ml-1 hidden xl:inline">
                               (min: {product.inventory.minStock})
@@ -618,6 +709,80 @@ export default function InventoryPage() {
           </div>
         )}
       </div>
+
+      {/* Stock Adjustment Popup */}
+      {stockDialogOpen && (
+        <>
+          {/* Positioned Popup */}
+          <div
+            className="fixed z-50 w-80 rounded-lg border bg-[#181818] p-4 shadow-lg"
+            style={{
+              left: `${popupPosition.x}px`,
+              top: `${popupPosition.y}px`,
+              transform: 'translateX(-50%)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Adjust Stock</h3>
+                {selectedProduct && (
+                  <p className="mt-1 text-xs text-white/60">
+                    {selectedProduct.name}
+                    <br />
+                    <span className="font-mono text-xs">{selectedProduct.sku}</span>
+                    <br />
+                    Current: <span className="font-semibold text-white">{selectedProduct.inventory?.quantity ?? 0}</span>
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="quantity" className="text-xs text-white/80">Quantity</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  min="1"
+                  value={quantityInput}
+                  onChange={(e) => setQuantityInput(e.target.value)}
+                  placeholder="Enter quantity"
+                  disabled={updatingStock}
+                  className="bg-white/10 text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  style={{ MozAppearance: 'textfield' }}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && quantityInput && parseInt(quantityInput) > 0) {
+                      handleStockUpdate('add')
+                    } else if (e.key === 'Escape') {
+                      setStockDialogOpen(false)
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => handleStockUpdate('subtract')}
+                  disabled={updatingStock || !quantityInput || parseInt(quantityInput) <= 0}
+                  className="flex-1 flex items-center justify-center gap-2"
+                  size="sm"
+                >
+                  <Minus className="h-4 w-4" />
+                  Subtract
+                </Button>
+                <Button
+                  onClick={() => handleStockUpdate('add')}
+                  disabled={updatingStock || !quantityInput || parseInt(quantityInput) <= 0}
+                  className="flex-1 flex items-center justify-center gap-2"
+                  size="sm"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add
+                </Button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
