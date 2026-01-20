@@ -250,7 +250,7 @@ export async function getOrders(params?: {
 
   const query = `
     query getOrders($first: Int!, $query: String) {
-      orders(first: $first, query: $query) {
+      orders(first: $first, query: $query, sortKey: CREATED_AT, reverse: true) {
         edges {
           node {
             id
@@ -299,7 +299,6 @@ export async function getOrders(params?: {
                   fulfillmentStatus
                   requiresShipping
                   taxable
-                  giftCard
                   name
                   customAttributes {
                     key
@@ -315,10 +314,6 @@ export async function getOrders(params?: {
               lastName
               phone
               numberOfOrders
-              totalSpent {
-                amount
-                currencyCode
-              }
               createdAt
               updatedAt
               tags
@@ -361,7 +356,6 @@ export async function getOrders(params?: {
             }
             note
             tags
-            orderNumber
             processedAt
             cancelledAt
             cancelReason
@@ -410,7 +404,7 @@ export async function getOrders(params?: {
       fulfillment_status: item.fulfillmentStatus,
       requires_shipping: item.requiresShipping,
       taxable: item.taxable,
-      gift_card: item.giftCard,
+      gift_card: false,
       name: item.name,
       properties: item.customAttributes?.map((attr: any) => ({
         name: attr.key,
@@ -424,7 +418,7 @@ export async function getOrders(params?: {
       last_name: node.customer.lastName || '',
       phone: node.customer.phone,
       orders_count: node.customer.numberOfOrders || 0,
-      total_spent: node.customer.totalSpent?.amount || '0',
+      total_spent: '0',
       created_at: node.customer.createdAt,
       updated_at: node.customer.updatedAt,
       tags: node.customer.tags?.join(',') || '',
@@ -467,7 +461,7 @@ export async function getOrders(params?: {
     } : null,
     note: node.note,
     tags: node.tags?.join(',') || '',
-    order_number: node.orderNumber,
+    order_number: parseInt((node.name || '').replace(/\D/g, '') || '0'),
     processed_at: node.processedAt,
     cancelled_at: node.cancelledAt,
     cancel_reason: node.cancelReason,
@@ -666,7 +660,7 @@ export async function getOrder(
       fulfillment_status: item.fulfillmentStatus,
       requires_shipping: item.requiresShipping,
       taxable: item.taxable,
-      gift_card: item.giftCard,
+      gift_card: false,
       name: item.name,
       properties: item.customAttributes?.map((attr: any) => ({
         name: attr.key,
@@ -680,7 +674,7 @@ export async function getOrder(
       last_name: node.customer.lastName || '',
       phone: node.customer.phone,
       orders_count: node.customer.numberOfOrders || 0,
-      total_spent: node.customer.totalSpent?.amount || '0',
+      total_spent: '0',
       created_at: node.customer.createdAt,
       updated_at: node.customer.updatedAt,
       tags: node.customer.tags?.join(',') || '',
@@ -723,7 +717,7 @@ export async function getOrder(
     } : null,
     note: node.note,
     tags: node.tags?.join(',') || '',
-    order_number: node.orderNumber,
+    order_number: parseInt((node.name || '').replace(/\D/g, '') || '0'),
     processed_at: node.processedAt,
     cancelled_at: node.cancelledAt,
     cancel_reason: node.cancelReason,

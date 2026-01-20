@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Plus, Eye, Pencil, RefreshCw } from 'lucide-react'
+import { Plus, Eye, Pencil, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -44,15 +44,37 @@ interface Order {
   }
 }
 
+interface ShopifyConnection {
+  connected: boolean
+  source: 'supabase' | 'env' | null
+  shop?: string | null
+  scope?: string | null
+}
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [shopifyConnection, setShopifyConnection] = useState<ShopifyConnection | null>(null)
+  const [showScopes, setShowScopes] = useState(false)
 
   useEffect(() => {
     fetchOrders()
+    fetchShopifyConnection()
   }, [])
+
+  const fetchShopifyConnection = async () => {
+    try {
+      const res = await fetch('/api/shopify/connection')
+      if (res.ok) {
+        const data = await res.json() as ShopifyConnection
+        setShopifyConnection(data)
+      }
+    } catch {
+      // ignore
+    }
+  }
 
   const filteredOrders = orders.filter(order =>
     order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -124,22 +146,22 @@ export default function OrdersPage() {
     }
   }
 
-  const getStatusVariant = (status: string): "default" | "secondary" | "outline" | "success" | "warning" => {
+  const getStatusVariant = (status: string): "default" | "secondary" | "outline" | "success" | "warning" | "destructive" => {
     switch (status) {
       case 'FULFILLED':
       case 'PAID':
         return 'success'
       case 'PENDING':
       case 'AUTHORIZED':
-        return 'warning'
+        return 'default'
       case 'PARTIALLY_FULFILLED':
       case 'PARTIALLY_PAID':
-        return 'outline'
+        return 'warning'
       case 'REFUNDED':
       case 'VOIDED':
         return 'secondary'
       case 'UNFULFILLED':
-        return 'default'
+        return 'destructive'
       default:
         return 'secondary'
     }
@@ -182,6 +204,58 @@ export default function OrdersPage() {
           </Button>
         </div>
       </div>
+
+      {/* Shopify Connection Status */}
+      {shopifyConnection?.connected && (
+        <Card className="border-blue-500/50 bg-blue-500/10">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <Badge variant="success" className="text-xs">
+                    Shopify Connected
+                  </Badge>
+                  {shopifyConnection.shop && (
+                    <span className="text-white/80 text-sm">
+                      {shopifyConnection.shop}
+                    </span>
+                  )}
+                </div>
+                {shopifyConnection.scope && (
+                  <div className="mt-3">
+                    <button
+                      onClick={() => setShowScopes(!showScopes)}
+                      className="flex items-center gap-2 text-white/60 hover:text-white/80 text-sm transition-colors"
+                    >
+                      {showScopes ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                      <span>View App Scopes ({shopifyConnection.scope.split(',').length} permissions)</span>
+                    </button>
+                    {showScopes && (
+                      <div className="mt-3 p-3 bg-white/5 rounded-lg border border-white/10">
+                        <div className="flex flex-wrap gap-2">
+                          {shopifyConnection.scope.split(',').map((scope, idx) => (
+                            <Badge
+                              key={idx}
+                              variant="outline"
+                              className="text-xs font-mono bg-white/5 border-white/20 text-white/70"
+                            >
+                              {scope.trim()}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Error Message */}
       {error && (
