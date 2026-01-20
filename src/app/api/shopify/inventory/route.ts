@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getInventoryLevels, adjustInventory, setInventory } from '@/lib/shopify';
+import { getDefaultShopifyCredentials } from '@/lib/shopify-connection';
 
 // GET inventory levels
 export async function GET(request: NextRequest) {
@@ -17,11 +18,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const creds = await getDefaultShopifyCredentials();
+    const credentials = { shopDomain: creds.shopDomain, accessToken: creds.accessToken };
+
     const inventoryLevels = await getInventoryLevels({
       location_ids: locationIds || undefined,
       inventory_item_ids: inventoryItemIds || undefined,
       limit: limit ? parseInt(limit) : undefined,
-    });
+    }, credentials);
 
     return NextResponse.json({ inventory_levels: inventoryLevels });
   } catch (error) {
@@ -47,13 +51,15 @@ export async function POST(request: NextRequest) {
     }
 
     let result;
+    const creds = await getDefaultShopifyCredentials();
+    const credentials = { shopDomain: creds.shopDomain, accessToken: creds.accessToken };
 
     if (typeof set_quantity === 'number') {
       // Set inventory to exact quantity
-      result = await setInventory(inventory_item_id, location_id, set_quantity);
+      result = await setInventory(inventory_item_id, location_id, set_quantity, credentials);
     } else if (typeof adjustment === 'number') {
       // Adjust inventory by delta
-      result = await adjustInventory(inventory_item_id, location_id, adjustment);
+      result = await adjustInventory(inventory_item_id, location_id, adjustment, credentials);
     } else {
       return NextResponse.json(
         { error: 'Either adjustment or set_quantity is required' },

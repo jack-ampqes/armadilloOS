@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { getProducts as getShopifyProducts, getProduct as getShopifyProduct } from '@/lib/shopify'
+import { getDefaultShopifyCredentials } from '@/lib/shopify-connection'
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,21 +11,13 @@ export async function GET(request: NextRequest) {
 
     // If source=shopify, fetch from Shopify API
     if (source === 'shopify') {
-      // Check if Shopify credentials are configured
-      if (!process.env.SHOPIFY_STORE_DOMAIN || !process.env.SHOPIFY_ACCESS_TOKEN) {
-        return NextResponse.json(
-          { 
-            error: 'Shopify integration not configured',
-            message: 'Please set SHOPIFY_STORE_DOMAIN and SHOPIFY_ACCESS_TOKEN in your .env.local file'
-          },
-          { status: 400 }
-        )
-      }
+      const creds = await getDefaultShopifyCredentials()
+      const credentials = { shopDomain: creds.shopDomain, accessToken: creds.accessToken }
 
       const shopifyProducts = await getShopifyProducts({
         limit: parseInt(searchParams.get('limit') || '50'),
         status: 'active',
-      })
+      }, credentials)
 
       // Transform Shopify products to match local format
       const transformedProducts = shopifyProducts.flatMap((product) => 

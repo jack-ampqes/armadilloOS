@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { getProduct as getShopifyProduct } from '@/lib/shopify'
 import { parseSkuToProduct } from '@/lib/sku-parser'
+import { getDefaultShopifyCredentials } from '@/lib/shopify-connection'
 
 export async function GET(
   request: NextRequest,
@@ -14,22 +15,13 @@ export async function GET(
     if (id.startsWith('shopify-')) {
       // Extract variant ID from the prefixed ID
       const variantId = parseInt(id.replace('shopify-', ''))
-      
-      // Check if Shopify credentials are configured
-      if (!process.env.SHOPIFY_STORE_DOMAIN || !process.env.SHOPIFY_ACCESS_TOKEN) {
-        return NextResponse.json(
-          { 
-            error: 'Shopify integration not configured',
-            message: 'Please set SHOPIFY_STORE_DOMAIN and SHOPIFY_ACCESS_TOKEN in your .env.local file'
-          },
-          { status: 400 }
-        )
-      }
+      const creds = await getDefaultShopifyCredentials()
+      const credentials = { shopDomain: creds.shopDomain, accessToken: creds.accessToken }
 
       // Fetch all products to find the one with matching variant
       // We need to search through products to find the variant
       const { getProducts } = await import('@/lib/shopify')
-      const shopifyProducts = await getProducts({ limit: 250 })
+      const shopifyProducts = await getProducts({ limit: 250 }, credentials)
       
       // Find the product and variant
       let foundVariant = null

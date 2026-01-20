@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrder } from '@/lib/shopify';
+import { getDefaultShopifyCredentials } from '@/lib/shopify-connection';
 
 export async function GET(
   request: NextRequest,
@@ -7,7 +8,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const order = await getOrder(id);
+    const creds = await getDefaultShopifyCredentials();
+    const order = await getOrder(id, { shopDomain: creds.shopDomain, accessToken: creds.accessToken });
     return NextResponse.json({ order });
   } catch (error) {
     console.error('Shopify order error:', error);

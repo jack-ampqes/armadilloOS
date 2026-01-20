@@ -19,6 +19,15 @@ interface UserProfile {
   updated_at: string
 }
 
+interface ShopifyConnectionStatus {
+  connected: boolean
+  source: 'supabase' | 'env' | null
+  shop?: string | null
+  scope?: string | null
+  installed_at?: string | null
+  updated_at?: string | null
+}
+
 export default function ProfilePage() {
   const router = useRouter()
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -30,6 +39,9 @@ export default function ProfilePage() {
     name: '',
     email: '',
   })
+  const [shopifyStatus, setShopifyStatus] = useState<ShopifyConnectionStatus | null>(null)
+  const [shopDomain, setShopDomain] = useState('')
+  const [shopifyError, setShopifyError] = useState('')
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
@@ -39,6 +51,7 @@ export default function ProfilePage() {
     }
 
     fetchProfile()
+    fetchShopifyStatus()
   }, [router])
 
   const fetchProfile = async () => {
@@ -84,6 +97,36 @@ export default function ProfilePage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const fetchShopifyStatus = async () => {
+    try {
+      const res = await fetch('/api/shopify/connection')
+      if (!res.ok) return
+      const data = (await res.json()) as ShopifyConnectionStatus
+      setShopifyStatus(data)
+      if (data?.shop && !shopDomain) {
+        setShopDomain(data.shop)
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleConnectShopify = () => {
+    setShopifyError('')
+    const userEmail = localStorage.getItem('user_email') || ''
+    if (!shopDomain.trim()) {
+      setShopifyError('Enter your shop domain (e.g. "your-store.myshopify.com")')
+      return
+    }
+    if (!userEmail) {
+      setShopifyError('Missing user email in localStorage. Please log in again.')
+      return
+    }
+    window.location.href = `/api/shopify/auth?shop=${encodeURIComponent(
+      shopDomain.trim()
+    )}&userEmail=${encodeURIComponent(userEmail)}`
   }
 
   const handleSave = async () => {
@@ -180,7 +223,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#181818] flex items-center justify-start p-6 lg:pl-[10%]">
+    <div className="min-h-screen bg-[#181818] flex items-start justify-start p-6 lg:pl-[10%]">
       <div className="max-w-2xl w-full">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-white mb-2">Profile</h1>
@@ -282,6 +325,53 @@ export default function ProfilePage() {
                   {formatDate(profile.updated_at)}
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* Shopify connection */}
+          <div className="mt-6 pt-6 border-t border-white/10 space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-white font-semibold">Shopify</h3>
+                <p className="text-white/60 text-sm">
+                  Connect your store to track orders in armadilloOS.
+                </p>
+              </div>
+              <Badge variant={shopifyStatus?.connected ? 'success' : 'secondary'}>
+                {shopifyStatus?.connected ? 'Connected' : 'Not connected'}
+              </Badge>
+            </div>
+
+            <div>
+              <Label htmlFor="shopDomain" className="text-white">
+                Shop domain
+              </Label>
+              <Input
+                id="shopDomain"
+                value={shopDomain}
+                onChange={(e) => setShopDomain(e.target.value)}
+                className="bg-white/10 border-white/20 text-white mt-1"
+                placeholder='your-store.myshopify.com'
+              />
+              {shopifyStatus?.connected && shopifyStatus.shop && (
+                <p className="text-white/40 text-xs mt-2">
+                  Connected to <span className="text-white/70">{shopifyStatus.shop}</span>
+                  {shopifyStatus.source ? ` (via ${shopifyStatus.source})` : ''}
+                </p>
+              )}
+              {shopifyError && (
+                <p className="text-red-400 text-xs mt-2">{shopifyError}</p>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                onClick={handleConnectShopify}
+                className="bg-white text-[#181818] hover:bg-white/90"
+              >
+                Connect Shopify
+              </Button>
             </div>
           </div>
 

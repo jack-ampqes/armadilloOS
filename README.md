@@ -37,9 +37,21 @@ A comprehensive management software for Armadillo Safety Products to manage orde
    # Application URL (Optional - defaults to http://localhost:3000 in development)
    NEXT_PUBLIC_APP_URL=http://localhost:3000
    
-   # Shopify Configuration (Optional - only needed if using Shopify integration)
+   # Shopify Configuration (Optional)
+   #
+   # Option A (recommended): Shopify OAuth "Connect Shopify" button
+   # Create a Shopify app and set:
+   SHOPIFY_API_KEY=your_shopify_app_client_id
+   SHOPIFY_API_SECRET=your_shopify_app_client_secret
+   SHOPIFY_APP_URL=http://localhost:3000
+   SHOPIFY_APP_SCOPES=read_orders,read_products,read_inventory,read_customers
+   #
+   # Also create the Supabase table defined in:
+   # supabaseTable/shopify_connections.sql
+   #
+   # Option B (legacy/dev fallback): single-store token via env
    SHOPIFY_STORE_DOMAIN=your-store.myshopify.com
-   SHOPIFY_ACCESS_TOKEN=your_shopify_access_token
+   SHOPIFY_ACCESS_TOKEN=your_shopify_admin_api_access_token
    ```
    
    Get your Supabase credentials from: https://app.supabase.com/project/_/settings/api

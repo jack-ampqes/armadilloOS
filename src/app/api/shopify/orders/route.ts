@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrders, getOrderCount } from '@/lib/shopify';
+import { getDefaultShopifyCredentials } from '@/lib/shopify-connection';
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
+    const creds = await getDefaultShopifyCredentials();
+    const credentials = { shopDomain: creds.shopDomain, accessToken: creds.accessToken };
     
     // Check if we just want count
     if (searchParams.get('count') === 'true') {
       const count = await getOrderCount({
         status: (searchParams.get('status') as 'open' | 'closed' | 'cancelled' | 'any') || 'any',
-      });
+      }, credentials);
       return NextResponse.json({ count });
     }
 
@@ -21,7 +24,7 @@ export async function GET(request: NextRequest) {
       financial_status: searchParams.get('financial_status') as 'paid' | 'pending' | 'any' | undefined,
       created_at_min: searchParams.get('created_at_min') || undefined,
       created_at_max: searchParams.get('created_at_max') || undefined,
-    });
+    }, credentials);
 
     return NextResponse.json({ orders });
   } catch (error) {

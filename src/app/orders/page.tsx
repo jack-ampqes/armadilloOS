@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface Order {
   id: string
@@ -49,11 +48,11 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [dataSource, setDataSource] = useState<'local' | 'shopify' | 'all'>('all')
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchOrders()
-  }, [dataSource])
+  }, [])
 
   const filteredOrders = orders.filter(order =>
     order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -63,36 +62,63 @@ export default function OrdersPage() {
 
   const fetchOrders = async () => {
     setLoading(true)
+    setError(null)
     try {
-      if (dataSource === 'all') {
-        // Fetch from both sources
-        const [localRes, shopifyRes] = await Promise.all([
-          fetch('/api/orders'),
-          fetch('/api/orders?source=shopify').catch(() => ({ ok: false, json: () => [] }))
-        ])
-        
-        const localOrders = localRes.ok ? await localRes.json() : []
-        let shopifyOrders: Order[] = []
-        
-        if (shopifyRes.ok) {
-          shopifyOrders = await shopifyRes.json()
-        }
-        
-        // Combine and sort by date
-        const combined = [...localOrders, ...shopifyOrders].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        )
-        setOrders(combined)
-      } else {
-        const url = dataSource === 'shopify' ? '/api/orders?source=shopify' : '/api/orders'
-        const response = await fetch(url)
-        if (response.ok) {
+      // Always fetch from Shopify Headless API
+      const response = await fetch('/api/orders')
+      
+      // Check content type before parsing
+      const contentType = response.headers.get('content-type')
+      const isJson = contentType?.includes('application/json')
+      
+      if (response.ok) {
+        if (isJson) {
           const data = await response.json()
-          setOrders(data)
+          setOrders(Array.isArray(data) ? data : [])
+          setError(null)
+        } else {
+          const text = await response.text()
+          console.error('Unexpected response format:', text)
+          setError('Invalid response format from server')
+          setOrders([])
         }
+      } else {
+        // Handle error response
+        let errorData: any = {}
+        let errorText = ''
+        
+        try {
+          if (isJson) {
+            errorData = await response.json()
+          } else {
+            errorText = await response.text()
+            errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` }
+          }
+        } catch (parseError) {
+          errorData = { 
+            error: `HTTP ${response.status}: ${response.statusText}`,
+            details: errorText || 'Could not parse error response'
+          }
+        }
+        
+        console.error('Error fetching orders:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+          contentType
+        })
+        
+        const statusCode = errorData.statusCode || response.status
+        const hint = errorData.hint ? ` (${errorData.hint})` : ''
+        const errorMessage = `${errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`}${hint}`
+        setError(errorMessage)
+        setOrders([])
       }
     } catch (error) {
-      console.error('Error fetching orders:', error)
+      console.error('Network error fetching orders:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to connect to server'
+      setError(errorMessage)
+      setOrders([])
     } finally {
       setLoading(false)
     }
@@ -100,17 +126,20 @@ export default function OrdersPage() {
 
   const getStatusVariant = (status: string): "default" | "secondary" | "outline" | "success" | "warning" => {
     switch (status) {
-      case 'PENDING':
-        return 'secondary'
-      case 'CONFIRMED':
-      case 'DELIVERED':
+      case 'FULFILLED':
+      case 'PAID':
         return 'success'
-      case 'PROCESSING':
+      case 'PENDING':
+      case 'AUTHORIZED':
+        return 'warning'
+      case 'PARTIALLY_FULFILLED':
+      case 'PARTIALLY_PAID':
         return 'outline'
-      case 'SHIPPED':
-        return 'default'
-      case 'CANCELLED':
+      case 'REFUNDED':
+      case 'VOIDED':
         return 'secondary'
+      case 'UNFULFILLED':
+        return 'default'
       default:
         return 'secondary'
     }
@@ -137,16 +166,6 @@ export default function OrdersPage() {
           </p>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
-          <Select value={dataSource} onValueChange={(value: 'local' | 'shopify' | 'all') => setDataSource(value)}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Sources</SelectItem>
-              <SelectItem value="local">Local Only</SelectItem>
-              <SelectItem value="shopify">Shopify Only</SelectItem>
-            </SelectContent>
-          </Select>
           <Button 
             variant="outline" 
             size="icon"
@@ -163,6 +182,38 @@ export default function OrdersPage() {
           </Button>
         </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <Card className="border-red-500/50 bg-red-500/10">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <p className="text-red-400 font-medium">Error loading orders</p>
+                <p className="text-red-300/80 text-sm mt-1">{error}</p>
+                {(error.includes('not configured') || error.includes('Missing Shopify credentials')) && (
+                  <p className="text-red-300/60 text-xs mt-2">
+                    Please add SHOPIFY_STORE_DOMAIN and SHOPIFY_ACCESS_TOKEN to your .env.local file and restart the server.
+                  </p>
+                )}
+                {(error.includes('Invalid API key') || error.includes('401') || error.includes('unrecognized login')) && (
+                  <div className="text-red-300/60 text-xs mt-2 space-y-1">
+                    <p>Your Shopify credentials are invalid. Please check:</p>
+                    <ul className="list-disc list-inside ml-2 space-y-1">
+                      <li>SHOPIFY_STORE_DOMAIN should be your store domain (e.g., "your-store.myshopify.com")</li>
+                      <li>SHOPIFY_ACCESS_TOKEN should be a valid Admin API access token</li>
+                      <li>Make sure you've restarted the dev server after adding credentials</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+              <Button variant="outline" size="sm" onClick={() => fetchOrders()}>
+                Retry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Search Bar */}
       <div className="relative">
@@ -201,9 +252,9 @@ export default function OrdersPage() {
                       <Badge variant={getStatusVariant(order.status)}>
                         {order.status}
                       </Badge>
-                      {order.source === 'shopify' && (
-                        <Badge variant="outline">
-                          Shopify
+                      {order.shopifyData?.financialStatus && (
+                        <Badge variant="outline" className="text-xs">
+                          {order.shopifyData.financialStatus.toUpperCase()}
                         </Badge>
                       )}
                     </div>

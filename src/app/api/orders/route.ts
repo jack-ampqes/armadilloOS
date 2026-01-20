@@ -1,297 +1,162 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
-import { getOrders as getShopifyOrders, formatShopifyPrice } from '@/lib/shopify'
+import { getOrders as getShopifyOrders } from '@/lib/shopify'
+import { getDefaultShopifyCredentials } from '@/lib/shopify-connection'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const source = searchParams.get('source')
 
-    // If source=shopify, fetch from Shopify API
-    if (source === 'shopify') {
-      const shopifyOrders = await getShopifyOrders({
-        limit: parseInt(searchParams.get('limit') || '50'),
-        status: (searchParams.get('status') as 'open' | 'closed' | 'cancelled' | 'any') || 'any',
-      })
+    const credentials = await getDefaultShopifyCredentials()
 
-      // Transform Shopify orders to match local format
-      const transformedOrders = shopifyOrders.map((order) => ({
-        id: `shopify-${order.id}`,
-        orderNumber: order.name,
-        status: mapShopifyStatus(order.financial_status, order.fulfillment_status),
-        totalAmount: parseFloat(order.total_price),
-        createdAt: order.created_at,
-        updatedAt: order.updated_at,
-        source: 'shopify',
-        customer: order.customer ? {
-          id: `shopify-${order.customer.id}`,
-          name: `${order.customer.first_name} ${order.customer.last_name}`.trim() || order.email,
-          email: order.customer.email || order.email,
-          phone: order.customer.phone,
-        } : {
-          id: 'unknown',
-          name: order.email || 'Unknown Customer',
-          email: order.email || '',
-        },
-        salesRep: null,
-        orderItems: order.line_items.map((item) => ({
-          id: `shopify-${item.id}`,
-          quantity: item.quantity,
-          unitPrice: parseFloat(item.price),
-          product: {
-            id: `shopify-${item.product_id}`,
-            name: item.title,
-            sku: item.sku,
-          }
-        })),
-        shopifyData: {
-          financialStatus: order.financial_status,
-          fulfillmentStatus: order.fulfillment_status,
-          tags: order.tags,
-          note: order.note,
-        }
-      }))
+    // Fetch from Shopify API (Headless API)
+    const shopifyOrders = await getShopifyOrders({
+      limit: parseInt(searchParams.get('limit') || '50'),
+      status: (searchParams.get('status') as 'open' | 'closed' | 'cancelled' | 'any') || 'any',
+      fulfillment_status: searchParams.get('fulfillment_status') as 'shipped' | 'partial' | 'unshipped' | 'any' | undefined,
+      financial_status: searchParams.get('financial_status') as 'authorized' | 'pending' | 'paid' | 'partially_paid' | 'refunded' | 'voided' | 'partially_refunded' | 'any' | undefined,
+      created_at_min: searchParams.get('created_at_min') || undefined,
+      created_at_max: searchParams.get('created_at_max') || undefined,
+    }, {
+      shopDomain: credentials.shopDomain,
+      accessToken: credentials.accessToken,
+    })
 
-      return NextResponse.json(transformedOrders)
-    }
-
-    // Default: fetch from Supabase
-    const { data: orders, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        customers(*),
-        sales_reps(*),
-        order_items(
-          *,
-          products(*)
-        )
-      `)
-      .order('created_at', { ascending: false })
-
-    if (error) throw error
-
-    // Transform data to match expected format
-    const transformedOrders = orders?.map((order: any) => ({
-      id: order.id,
-      orderNumber: order.order_number,
-      customerId: order.customer_id,
-      salesRepId: order.sales_rep_id,
-      status: order.status,
-      totalAmount: parseFloat(order.total_amount),
-      notes: order.notes,
+    // Transform Shopify orders to match expected format
+    const transformedOrders = shopifyOrders.map((order) => ({
+      id: `shopify-${order.id}`,
+      orderNumber: order.name,
+      status: mapShopifyStatus(order.financial_status, order.fulfillment_status),
+      totalAmount: parseFloat(order.total_price),
       createdAt: order.created_at,
       updatedAt: order.updated_at,
-      customer: order.customers ? {
-        id: order.customers.id,
-        name: order.customers.name,
-        email: order.customers.email,
-        phone: order.customers.phone,
-        address: order.customers.address,
-        city: order.customers.city,
-        state: order.customers.state,
-        zipCode: order.customers.zip_code,
-        country: order.customers.country,
-        createdAt: order.customers.created_at,
-        updatedAt: order.customers.updated_at
-      } : null,
-      salesRep: order.sales_reps ? {
-        id: order.sales_reps.id,
-        name: order.sales_reps.name,
-        email: order.sales_reps.email,
-        phone: order.sales_reps.phone,
-        territory: order.sales_reps.territory,
-        commissionRate: order.sales_reps.commission_rate ? parseFloat(order.sales_reps.commission_rate) : null,
-        createdAt: order.sales_reps.created_at,
-        updatedAt: order.sales_reps.updated_at
-      } : null,
-      orderItems: (order.order_items || []).map((item: any) => ({
-        id: item.id,
-        orderId: item.order_id,
-        productId: item.product_id,
+      source: 'shopify',
+      customer: order.customer ? {
+        id: `shopify-${order.customer.id}`,
+        name: `${order.customer.first_name} ${order.customer.last_name}`.trim() || order.email,
+        email: order.customer.email || order.email,
+        phone: order.customer.phone,
+      } : {
+        id: 'unknown',
+        name: order.email || 'Unknown Customer',
+        email: order.email || '',
+      },
+      salesRep: null,
+      orderItems: order.line_items.map((item) => ({
+        id: `shopify-${item.id}`,
         quantity: item.quantity,
-        unitPrice: parseFloat(item.unit_price),
-        totalPrice: parseFloat(item.total_price),
-        product: item.products ? {
-          id: item.products.id,
-          name: item.products.name,
-          description: item.products.description,
-          sku: item.products.sku,
-          price: parseFloat(item.products.price),
-          category: item.products.category,
-          createdAt: item.products.created_at,
-          updatedAt: item.products.updated_at
-        } : null
-      }))
-    })) || []
-
-    // Add source identifier for local orders
-    const ordersWithSource = transformedOrders.map((order: any) => ({
-      ...order,
-      source: 'local'
+        unitPrice: parseFloat(item.price),
+        product: {
+          id: `shopify-${item.product_id}`,
+          name: item.title,
+          sku: item.sku,
+        }
+      })),
+      shopifyData: {
+        financialStatus: order.financial_status,
+        fulfillmentStatus: order.fulfillment_status,
+        tags: order.tags,
+        note: order.note,
+      }
     }))
 
-    return NextResponse.json(ordersWithSource)
+    return NextResponse.json(transformedOrders)
   } catch (error) {
-    console.error('Error fetching orders:', error)
+    console.error('Error fetching orders from Shopify:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+    
+    // Check if it's a credentials error
+    if (errorMessage.includes('Missing Shopify credentials') || errorMessage.includes('not configured')) {
+      return NextResponse.json(
+        { 
+          error: 'Shopify integration not configured',
+          message: errorMessage
+        },
+        { status: 400 }
+      )
+    }
+    
+    // Check if it's an API error
+    if (errorMessage.includes('Shopify API error')) {
+      // Extract the actual error from Shopify's response
+      let shopifyError = errorMessage
+      let upstreamStatus: number | null = null
+      try {
+        // Shopify errors are often in format: "Shopify API error (401): {\"errors\":\"...\"}"
+        const match = errorMessage.match(/\((\d+)\):\s*(.+)/)
+        if (match) {
+          const statusCode = match[1]
+          upstreamStatus = Number(statusCode)
+          const errorBody = match[2]
+          try {
+            const parsed = JSON.parse(errorBody)
+            shopifyError = parsed.errors || parsed.error || errorBody
+          } catch {
+            shopifyError = errorBody
+          }
+        }
+      } catch {
+        // Keep original error message
+      }
+      
+      return NextResponse.json(
+        { 
+          error: 'Shopify API error',
+          message: shopifyError,
+          statusCode: upstreamStatus ?? undefined,
+          hint:
+            upstreamStatus === 401
+              ? 'Your Admin API access token is invalid (or you are using a Storefront token by mistake).'
+              : upstreamStatus === 403
+                ? 'Your Admin API token is valid, but it likely lacks the required scopes (need read_orders).'
+                : undefined,
+        },
+        {
+          // If Shopify explicitly tells us it is unauthorized/forbidden, pass that through so the UI can react.
+          status: upstreamStatus === 401 || upstreamStatus === 403 ? upstreamStatus : 502,
+        }
+      )
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to fetch orders' },
+      { 
+        error: 'Failed to fetch orders from Shopify',
+        message: errorMessage
+      },
       { status: 500 }
     )
   }
 }
 
-// Map Shopify status to local status format
+// Map Shopify status to display format
 function mapShopifyStatus(
   financialStatus: string,
   fulfillmentStatus: string | null
 ): string {
-  if (fulfillmentStatus === 'fulfilled') return 'DELIVERED'
-  if (fulfillmentStatus === 'partial') return 'SHIPPED'
-  if (financialStatus === 'paid' && !fulfillmentStatus) return 'CONFIRMED'
+  // Prioritize fulfillment status
+  if (fulfillmentStatus === 'fulfilled') return 'FULFILLED'
+  if (fulfillmentStatus === 'partial') return 'PARTIALLY_FULFILLED'
+  
+  // Then check financial status
+  if (financialStatus === 'paid') return 'PAID'
   if (financialStatus === 'pending') return 'PENDING'
-  if (financialStatus === 'refunded' || financialStatus === 'voided') return 'CANCELLED'
-  return 'PROCESSING'
+  if (financialStatus === 'authorized') return 'AUTHORIZED'
+  if (financialStatus === 'partially_paid') return 'PARTIALLY_PAID'
+  if (financialStatus === 'refunded') return 'REFUNDED'
+  if (financialStatus === 'partially_refunded') return 'PARTIALLY_REFUNDED'
+  if (financialStatus === 'voided') return 'VOIDED'
+  
+  return 'UNFULFILLED'
 }
 
+// Note: Order creation should be done through Shopify API
+// This endpoint is now read-only for Shopify orders
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const { customerId, salesRepId, orderItems, notes } = body
-
-    // Generate order number - get count of existing orders
-    const { count } = await supabase
-      .from('orders')
-      .select('*', { count: 'exact', head: true })
-
-    const orderNumber = `ORD-${String((count || 0) + 1).padStart(4, '0')}`
-
-    // Calculate total amount
-    let totalAmount = 0
-    for (const item of orderItems) {
-      // Get product by SKU (using SKU as ID)
-      const { data: productData, error: productError } = await supabase.rpc('get_product_by_sku', {
-        product_sku: item.productId // productId is actually SKU
-      })
-      const product = productData?.[0] // RPC returns array, get first item
-
-      if (productError || !product) {
-        return NextResponse.json(
-          { error: `Product ${item.productId} not found` },
-          { status: 400 }
-        )
-      }
-      totalAmount += parseFloat(product.price) * item.quantity
-    }
-
-    // Create order
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert({
-        order_number: orderNumber,
-        customer_id: customerId,
-        sales_rep_id: salesRepId || null,
-        total_amount: totalAmount,
-        notes
-      })
-      .select()
-      .single()
-
-    if (orderError) throw orderError
-
-    // Create order items
-    const orderItemsData = orderItems.map((item: any) => ({
-      order_id: order.id,
-      product_id: item.productId,
-      quantity: item.quantity,
-      unit_price: item.unitPrice,
-      total_price: item.unitPrice * item.quantity
-    }))
-
-    const { error: itemsError } = await supabase
-      .from('order_items')
-      .insert(orderItemsData)
-
-    if (itemsError) throw itemsError
-
-    // Fetch complete order with relations
-    const { data: completeOrder, error: fetchError } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        customers(*),
-        sales_reps(*),
-        order_items(
-          *,
-          products(*)
-        )
-      `)
-      .eq('id', order.id)
-      .single()
-
-    if (fetchError) throw fetchError
-
-    // Transform to expected format
-    const transformedOrder = {
-      id: completeOrder.id,
-      orderNumber: completeOrder.order_number,
-      customerId: completeOrder.customer_id,
-      salesRepId: completeOrder.sales_rep_id,
-      status: completeOrder.status,
-      totalAmount: parseFloat(completeOrder.total_amount),
-      notes: completeOrder.notes,
-      createdAt: completeOrder.created_at,
-      updatedAt: completeOrder.updated_at,
-      customer: completeOrder.customers ? {
-        id: completeOrder.customers.id,
-        name: completeOrder.customers.name,
-        email: completeOrder.customers.email,
-        phone: completeOrder.customers.phone,
-        address: completeOrder.customers.address,
-        city: completeOrder.customers.city,
-        state: completeOrder.customers.state,
-        zipCode: completeOrder.customers.zip_code,
-        country: completeOrder.customers.country,
-        createdAt: completeOrder.customers.created_at,
-        updatedAt: completeOrder.customers.updated_at
-      } : null,
-      salesRep: completeOrder.sales_reps ? {
-        id: completeOrder.sales_reps.id,
-        name: completeOrder.sales_reps.name,
-        email: completeOrder.sales_reps.email,
-        phone: completeOrder.sales_reps.phone,
-        territory: completeOrder.sales_reps.territory,
-        commissionRate: completeOrder.sales_reps.commission_rate ? parseFloat(completeOrder.sales_reps.commission_rate) : null,
-        createdAt: completeOrder.sales_reps.created_at,
-        updatedAt: completeOrder.sales_reps.updated_at
-      } : null,
-      orderItems: (completeOrder.order_items || []).map((item: any) => ({
-        id: item.id,
-        orderId: item.order_id,
-        productId: item.product_id,
-        quantity: item.quantity,
-        unitPrice: parseFloat(item.unit_price),
-        totalPrice: parseFloat(item.total_price),
-        product: item.products ? {
-          id: item.products.id,
-          name: item.products.name,
-          description: item.products.description,
-          sku: item.products.sku,
-          price: parseFloat(item.products.price),
-          category: item.products.category,
-          createdAt: item.products.created_at,
-          updatedAt: item.products.updated_at
-        } : null
-      }))
-    }
-
-    return NextResponse.json(transformedOrder, { status: 201 })
-  } catch (error) {
-    console.error('Error creating order:', error)
-    return NextResponse.json(
-      { error: 'Failed to create order' },
-      { status: 500 }
-    )
-  }
+  return NextResponse.json(
+    { 
+      error: 'Order creation not supported via this endpoint',
+      message: 'Orders must be created through Shopify. Use the Shopify Admin API or Storefront API to create orders.'
+    },
+    { status: 405 }
+  )
 }
 
