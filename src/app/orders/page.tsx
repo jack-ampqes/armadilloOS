@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Plus, Eye, Pencil, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -175,17 +175,14 @@ export default function OrdersPage() {
     )
   }
 
+        {/* Header */}
   return (
     <div className="space-y-8 max-w-7xl">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white">
             Orders
           </h1>
-          <p className="mt-2 text-white/60">
-            Manage customer orders and track their status.
-          </p>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
           <Button 
@@ -207,52 +204,48 @@ export default function OrdersPage() {
 
       {/* Shopify Connection Status */}
       {shopifyConnection?.connected && (
-        <Card className="border-blue-500/50 bg-blue-500/10">
+        <Card 
+          className="cursor-pointer hover:bg-white/5 transition-colors"
+          onClick={() => setShowScopes(!showScopes)}
+        >
           <CardContent className="p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <Badge variant="success" className="text-xs">
-                    Shopify Connected
-                  </Badge>
-                  {shopifyConnection.shop && (
-                    <span className="text-white/80 text-sm">
-                      {shopifyConnection.shop}
-                    </span>
-                  )}
-                </div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Badge variant="success" className="text-xs">
+                  Shopify Connected
+                </Badge>
+                {shopifyConnection.shop && (
+                  <span className="text-white/80 text-sm">
+                    {shopifyConnection.shop}
+                  </span>
+                )}
                 {shopifyConnection.scope && (
-                  <div className="mt-3">
-                    <button
-                      onClick={() => setShowScopes(!showScopes)}
-                      className="flex items-center gap-2 text-white/60 hover:text-white/80 text-sm transition-colors"
-                    >
-                      {showScopes ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                      <span>View App Scopes ({shopifyConnection.scope.split(',').length} permissions)</span>
-                    </button>
-                    {showScopes && (
-                      <div className="mt-3 p-3 bg-white/5 rounded-lg border border-white/10">
-                        <div className="flex flex-wrap gap-2">
-                          {shopifyConnection.scope.split(',').map((scope, idx) => (
-                            <Badge
-                              key={idx}
-                              variant="outline"
-                              className="text-xs font-mono bg-white/5 border-white/20 text-white/70"
-                            >
-                              {scope.trim()}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <span className="text-white/40 text-sm">
+                    ({shopifyConnection.scope.split(',').length} permissions)
+                  </span>
                 )}
               </div>
+              {showScopes ? (
+                <ChevronUp className="w-5 h-5 text-white/60" />
+              ) : (
+                <ChevronDown className="w-5 h-5 text-white/60" />
+              )}
             </div>
+            {showScopes && shopifyConnection.scope && (
+              <div className="mt-4 p-3 bg-white/5 rounded-lg">
+                <div className="flex flex-wrap gap-2">
+                  {shopifyConnection.scope.split(',').map((scope, idx) => (
+                    <Badge
+                      key={idx}
+                      variant="outline"
+                      className="text-xs font-mono bg-white/5 text-white/70"
+                    >
+                      {scope.trim()}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -314,8 +307,9 @@ export default function OrdersPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 * index }}
           >
-            <Card className="group">
-              <CardContent className="p-6">
+            <Link href={`/orders/${order.orderNumber.replace('#', '')}`}>
+              <Card className="group cursor-pointer hover:bg-white/5 transition-colors">
+                <CardContent className="p-6">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                   {/* Order Info */}
                   <div className="flex-1 space-y-3">
@@ -349,31 +343,17 @@ export default function OrdersPage() {
                     </div>
                   </div>
 
-                  {/* Amount & Actions */}
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <p className="text-sm text-white/60">Total Amount</p>
-                      <p className="text-2xl font-bold text-white">
-                        ${order.totalAmount.toFixed(2)}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="icon" asChild>
-                        <Link href={`/orders/${order.id}`}>
-                          <Eye className="w-5 h-5" />
-                        </Link>
-                      </Button>
-                      <Button size="icon" asChild>
-                        <Link href={`/orders/${order.id}/edit`}>
-                          <Pencil className="w-5 h-5" />
-                        </Link>
-                      </Button>
-                    </div>
+                  {/* Amount */}
+                  <div className="text-right">
+                    <p className="text-sm text-white/60">Total Amount</p>
+                    <p className="text-2xl font-bold text-white">
+                      ${order.totalAmount.toFixed(2)}
+                    </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
+          </Link>
           </motion.div>
         ))}
       </motion.div>

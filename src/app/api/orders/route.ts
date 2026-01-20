@@ -127,24 +127,17 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Map Shopify status to display format
+// Map Shopify fulfillment status to display format
+// This is for the primary badge (fulfillment status)
 function mapShopifyStatus(
   financialStatus: string,
   fulfillmentStatus: string | null
 ): string {
-  // Prioritize fulfillment status
+  // Show fulfillment status as the primary badge
   if (fulfillmentStatus === 'fulfilled') return 'FULFILLED'
   if (fulfillmentStatus === 'partial') return 'PARTIALLY_FULFILLED'
   
-  // Then check financial status
-  if (financialStatus === 'paid') return 'PAID'
-  if (financialStatus === 'pending') return 'PENDING'
-  if (financialStatus === 'authorized') return 'AUTHORIZED'
-  if (financialStatus === 'partially_paid') return 'PARTIALLY_PAID'
-  if (financialStatus === 'refunded') return 'REFUNDED'
-  if (financialStatus === 'partially_refunded') return 'PARTIALLY_REFUNDED'
-  if (financialStatus === 'voided') return 'VOIDED'
-  
+  // If not fulfilled, show as UNFULFILLED
   return 'UNFULFILLED'
 }
 

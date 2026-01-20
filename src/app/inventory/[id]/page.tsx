@@ -18,19 +18,11 @@ interface Product {
   color?: string
   leadtime?: string
   category?: string
-  source?: 'local' | 'shopify'
   inventory?: {
     quantity: number
     minStock: number
     location?: string
     lastUpdated?: string
-    inventoryItemId?: number
-  }
-  shopifyData?: {
-    productId: number
-    variantId: number
-    inventoryItemId: number
-    handle: string
   }
 }
 
@@ -200,16 +192,6 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            {product.source && (
-              <div>
-                <label className="text-sm font-medium text-white/60">Source</label>
-                <div className="mt-1">
-                  <Badge variant="outline">
-                    {product.source === 'shopify' ? 'Shopify' : 'Local'}
-                  </Badge>
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
 
@@ -258,22 +240,6 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            {product.shopifyData && (
-              <div className="pt-4 border-t border-white/10">
-                <label className="text-sm font-medium text-white/60">Shopify Data</label>
-                <div className="mt-2 space-y-1 text-sm">
-                  <p className="text-white/80">
-                    <span className="text-white/60">Product ID:</span> {product.shopifyData.productId}
-                  </p>
-                  <p className="text-white/80">
-                    <span className="text-white/60">Variant ID:</span> {product.shopifyData.variantId}
-                  </p>
-                  <p className="text-white/80">
-                    <span className="text-white/60">Inventory Item ID:</span> {product.shopifyData.inventoryItemId}
-                  </p>
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>

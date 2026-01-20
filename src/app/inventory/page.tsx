@@ -21,19 +21,13 @@ interface Product {
   sku: string
   price: number
   category?: string
-  source?: 'local' | 'shopify'
+  color?: string
+  leadtime?: string
   inventory?: {
     quantity: number
     minStock: number
     location?: string
     lastUpdated?: string
-    inventoryItemId?: number
-  }
-  shopifyData?: {
-    productId: number
-    variantId: number
-    inventoryItemId: number
-    handle: string
   }
   orderItems: Array<{
     quantity: number
@@ -50,7 +44,6 @@ export default function InventoryPage() {
   const [sortBy, setSortBy] = useState('name') // name, sku, price, stock, category
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [page, setPage] = useState(1)
-  const [dataSource, setDataSource] = useState<'local' | 'shopify' | 'all'>('all')
   const [stockDialogOpen, setStockDialogOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [quantityInput, setQuantityInput] = useState('')
@@ -60,7 +53,7 @@ export default function InventoryPage() {
 
   useEffect(() => {
     fetchProducts()
-  }, [dataSource])
+  }, [])
 
   useEffect(() => {
     // Load more products when page changes
@@ -95,140 +88,39 @@ export default function InventoryPage() {
   const fetchProducts = async () => {
     setLoading(true)
     try {
-      if (dataSource === 'all') {
-        // Fetch from both sources
-        const [inventoryRes, shopifyRes] = await Promise.all([
-          fetch('/api/inventory'),
-          fetch('/api/products?source=shopify').catch(() => ({ ok: false, status: 500, json: async () => ({ error: 'Network error' }) }))
-        ])
+      const response = await fetch('/api/inventory')
+      if (response.ok) {
+        const inventoryData = await response.json()
         
         // Transform inventory data from armadillo_inventory.inventory schema
-        let localProducts: Product[] = []
-        if (inventoryRes.ok) {
-          const inventoryData = await inventoryRes.json()
+        const transformedProducts = (inventoryData.inventory || []).map((item: any) => {
+          const product = item.product || {}
           
-          // Debug: Log the first item to see structure
-          if (inventoryData.inventory && inventoryData.inventory.length > 0) {
-            console.log('Sample inventory item from API:', inventoryData.inventory[0])
+          return {
+            id: item.sku,
+            name: product.name || item.name || 'Unknown Product',
+            description: product.description,
+            sku: item.sku,
+            price: product.price ? parseFloat(product.price) : (item.price ? parseFloat(item.price) : 0),
+            category: product.category,
+            color: product.color || item.color,
+            leadtime: product.leadtime || item.leadtime,
+            inventory: {
+              quantity: item.quantity ?? 0,
+              minStock: item.min_stock ?? item.minStock ?? 0,
+              location: item.location,
+              lastUpdated: item.updatedAt || item.updated_at,
+            },
+            orderItems: []
           }
-          
-          // inventoryData.inventory is an array of inventory items with product info
-          localProducts = (inventoryData.inventory || []).map((item: any) => {
-            const product = item.product || {}
-            
-            // Debug: Log if name is missing or looks like UUID
-            if (!product.name || product.name.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-              console.warn('Product name issue:', {
-                itemSku: item.sku,
-                productName: product.name,
-                itemName: item.name,
-                fullItem: item
-              })
-            }
-            
-            return {
-              id: item.sku,
-              name: product.name || item.name || 'Unknown Product',
-              description: product.description,
-              sku: item.sku,
-              price: product.price ? parseFloat(product.price) : (item.price ? parseFloat(item.price) : 0),
-              category: product.category,
-              color: product.color || item.color,
-              leadtime: product.leadtime || item.leadtime,
-              source: 'local' as const,
-              inventory: {
-                quantity: item.quantity ?? 0,
-                minStock: item.min_stock ?? item.minStock ?? 0,
-                location: item.location,
-                lastUpdated: item.updatedAt || item.updated_at,
-              },
-              orderItems: []
-            }
-          })
-        }
-        
-        let shopifyProducts: Product[] = []
-        if (shopifyRes.ok) {
-          shopifyProducts = await shopifyRes.json()
-        } else if (shopifyRes.status === 400) {
-          // Shopify not configured - this is expected, just log it
-          const errorData = await shopifyRes.json().catch(() => ({}))
-          console.warn('Shopify integration not configured:', errorData.message || 'Missing credentials')
-        }
-        
-        // Combine products
-        const combined = [...localProducts, ...shopifyProducts]
-        setAllProducts(combined)
-        setDisplayedProducts(combined.slice(0, PRODUCTS_PER_PAGE))
-      } else if (dataSource === 'shopify') {
-        const response = await fetch('/api/products?source=shopify')
-        if (response.ok) {
-          const data = await response.json()
-          setAllProducts(data)
-          setDisplayedProducts(data.slice(0, PRODUCTS_PER_PAGE))
-        } else if (response.status === 400) {
-          // Shopify not configured - show empty state with helpful message
-          const errorData = await response.json().catch(() => ({}))
-          console.warn('Shopify integration not configured:', errorData.message || 'Missing credentials')
-          setAllProducts([])
-          setDisplayedProducts([])
-        } else {
-          console.error('Error fetching products:', response.status, response.statusText)
-          setAllProducts([])
-          setDisplayedProducts([])
-        }
+        })
+        setAllProducts(transformedProducts)
+        setDisplayedProducts(transformedProducts.slice(0, PRODUCTS_PER_PAGE))
       } else {
-        // Local only - fetch from inventory API
-        const response = await fetch('/api/inventory')
-        if (response.ok) {
-          const inventoryData = await response.json()
-          
-          // Debug: Log the first item to see structure
-          if (inventoryData.inventory && inventoryData.inventory.length > 0) {
-            console.log('Sample inventory item from API (local only):', inventoryData.inventory[0])
-          }
-          
-          // Transform inventory data from armadillo_inventory.inventory schema
-          const transformedProducts = (inventoryData.inventory || []).map((item: any) => {
-            const product = item.product || {}
-            
-            // Debug: Log if name is missing or looks like UUID
-            if (!product.name || product.name.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-              console.warn('Product name issue:', {
-                itemSku: item.sku,
-                productName: product.name,
-                itemName: item.name,
-                fullItem: item
-              })
-            }
-            
-            return {
-              id: item.sku,
-              name: product.name || item.name || 'Unknown Product',
-              description: product.description,
-              sku: item.sku,
-              price: product.price ? parseFloat(product.price) : (item.price ? parseFloat(item.price) : 0),
-              category: product.category,
-              color: product.color || item.color,
-              leadtime: product.leadtime || item.leadtime,
-              source: 'local' as const,
-              inventory: {
-                quantity: item.quantity ?? 0,
-                minStock: item.min_stock ?? item.minStock ?? 0,
-                location: item.location,
-                lastUpdated: item.updatedAt || item.updated_at,
-              },
-              orderItems: []
-            }
-          })
-          setAllProducts(transformedProducts)
-          setDisplayedProducts(transformedProducts.slice(0, PRODUCTS_PER_PAGE))
-        } else {
-          const errorData = await response.json().catch(() => ({}))
-          console.error('Error fetching inventory:', response.status, response.statusText, errorData)
-          setAllProducts([])
-          setDisplayedProducts([])
-        }
+        const errorData = await response.json().catch(() => ({}))
+        console.error('Error fetching inventory:', response.status, response.statusText, errorData)
+        setAllProducts([])
+        setDisplayedProducts([])
       }
     } catch (error) {
       console.error('Error fetching products:', error)
@@ -319,10 +211,6 @@ export default function InventoryPage() {
 
   const handleStockClick = (product: Product, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (product.source === 'shopify') {
-      // Don't allow editing Shopify stock from here
-      return
-    }
     
     // Get click position relative to viewport
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
@@ -414,16 +302,6 @@ export default function InventoryPage() {
           </p>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
-          <Select value={dataSource} onValueChange={(value: 'local' | 'shopify' | 'all') => setDataSource(value)}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Sources</SelectItem>
-              <SelectItem value="local">Local Only</SelectItem>
-              <SelectItem value="shopify">Shopify Only</SelectItem>
-            </SelectContent>
-          </Select>
           <Button 
             variant="outline" 
             size="icon"
@@ -608,11 +486,6 @@ export default function InventoryPage() {
                           <div className="max-w-xs">
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-white truncate">{product.name}</span>
-                              {product.source === 'shopify' && (
-                                <Badge variant="outline" className="text-xs shrink-0">
-                                  Shopify
-                                </Badge>
-                              )}
                             </div>
                             {product.description && (
                               <div className="text-white/60 text-xs truncate" title={product.description}>
@@ -637,8 +510,8 @@ export default function InventoryPage() {
                           onClick={(e) => handleStockClick(product, e)}
                         >
                           <span 
-                            className={`font-semibold ${product.source !== 'shopify' ? 'cursor-pointer hover:text-blue-400 transition-colors' : ''}`}
-                            title={product.source !== 'shopify' ? 'Click to adjust stock' : ''}
+                            className="font-semibold cursor-pointer hover:text-blue-400 transition-colors"
+                            title="Click to adjust stock"
                           >
                             {product.inventory?.quantity ?? 0}
                           </span>

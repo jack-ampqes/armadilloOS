@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parseSkuToProduct } from '@/lib/sku-parser'
 import QRCode from 'qrcode'
 import JsBarcode from 'jsbarcode'
 import { createCanvas } from 'canvas'
@@ -12,15 +13,23 @@ export async function GET(request: Request) {
 
   try {
     if (sku) {
-      // Generate single code for specific SKU using RPC
-      const { data: productData, error } = await supabase.rpc('get_product_by_sku', {
-        product_sku: sku
-      })
-      const product = productData?.[0] // RPC returns array, get first item
+      // Generate single code for specific SKU from armadillo_inventory.inventory
+      const { data: inventoryItem, error } = await supabase
+        .schema('armadillo_inventory')
+        .from('inventory')
+        .select('*')
+        .eq('sku', sku)
+        .single()
 
-      if (error || !product) {
+      if (error || !inventoryItem) {
         return NextResponse.json({ error: 'Product not found' }, { status: 404 })
       }
+
+      // Generate product name from SKU
+      const parsedSku = parseSkuToProduct(sku)
+      const productName = parsedSku.valid && parsedSku.title 
+        ? parsedSku.title 
+        : inventoryItem.name || `Product ${sku}`
 
       let codeImage: string
       
@@ -55,7 +64,8 @@ export async function GET(request: Request) {
 
       return NextResponse.json({
         sku,
-        productName: product.name,
+        productName,
+        name: productName,
         code: codeImage,
         qrCode: codeImage, // Keep for backward compatibility
         barcode: type === 'barcode' ? codeImage : undefined,
@@ -63,8 +73,11 @@ export async function GET(request: Request) {
         type,
       })
     } else {
-      // Get all products with codes using RPC
-      const { data: products, error } = await supabase.rpc('get_products')
+      // Get all inventory items from armadillo_inventory.inventory
+      const { data: inventoryItems, error } = await supabase
+        .schema('armadillo_inventory')
+        .from('inventory')
+        .select('*')
 
       if (error) {
         console.error('Supabase error:', error)
@@ -80,17 +93,25 @@ export async function GET(request: Request) {
         )
       }
 
-      // If no products, return empty array
-      if (!products || products.length === 0) {
+      // If no inventory items, return empty array
+      if (!inventoryItems || inventoryItems.length === 0) {
         return NextResponse.json({ codes: [], qrCodes: [], total: 0 })
       }
 
       const codes = await Promise.all(
-        products.map(async (product: any) => {
+        inventoryItems.map(async (item: any) => {
+          const skuValue = item.sku || ''
+          
+          // Generate product name from SKU
+          const parsedSku = parseSkuToProduct(skuValue)
+          const productName = parsedSku.valid && parsedSku.title 
+            ? parsedSku.title 
+            : item.name || `Product ${skuValue}`
+
           if (type === 'barcode') {
             // Generate barcode using SKU
             const canvas = createCanvas(300, 100)
-            JsBarcode(canvas, product.sku, {
+            JsBarcode(canvas, skuValue, {
               format: 'CODE128',
               width: 2,
               height: 80,
@@ -101,20 +122,20 @@ export async function GET(request: Request) {
             const barcode = canvas.toDataURL('image/png')
             
             return {
-              sku: product.sku,
-              name: product.name,
+              sku: skuValue,
+              name: productName,
               code: barcode,
               qrCode: barcode, // Keep for backward compatibility
               barcode,
             }
           } else {
             // Generate QR code
-            const qrData = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/inventory/scan?sku=${product.sku}`
+            const qrData = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/inventory/scan?sku=${skuValue}`
             const code = await QRCode.toDataURL(qrData, { width: 300, margin: 2 })
             
             return {
-              sku: product.sku,
-              name: product.name,
+              sku: skuValue,
+              name: productName,
               code,
               qrCode: code, // Keep for backward compatibility
             }

@@ -220,11 +220,17 @@ export async function getOrders(params?: {
   financial_status?: 'authorized' | 'pending' | 'paid' | 'partially_paid' | 'refunded' | 'voided' | 'partially_refunded' | 'any';
   created_at_min?: string;
   created_at_max?: string;
+  name?: string;
 }, credentials?: ShopifyApiCredentials): Promise<ShopifyOrder[]> {
   const limit = params?.limit || 50;
   
   // Build query filter
   const queryParts: string[] = [];
+  if (params?.name) {
+    // Search by order name (e.g., "#1001" or "1001")
+    const orderName = params.name.startsWith('#') ? params.name : `#${params.name}`;
+    queryParts.push(`name:${orderName}`);
+  }
   if (params?.status && params.status !== 'any') {
     queryParts.push(`status:${params.status}`);
   }
@@ -487,6 +493,7 @@ function mapFulfillmentStatus(status: string | null): ShopifyOrder['fulfillment_
   const statusMap: Record<string, ShopifyOrder['fulfillment_status']> = {
     'FULFILLED': 'fulfilled',
     'PARTIAL': 'partial',
+    'PARTIALLY_FULFILLED': 'partial',
     'UNFULFILLED': 'unfulfilled',
   };
   return statusMap[status.toUpperCase()] || null;
@@ -552,7 +559,6 @@ export async function getOrder(
               fulfillmentStatus
               requiresShipping
               taxable
-              giftCard
               name
               customAttributes {
                 key
@@ -568,10 +574,6 @@ export async function getOrder(
           lastName
           phone
           numberOfOrders
-          totalSpent {
-            amount
-            currencyCode
-          }
           createdAt
           updatedAt
           tags
@@ -614,7 +616,6 @@ export async function getOrder(
         }
         note
         tags
-        orderNumber
         processedAt
         cancelledAt
         cancelReason
