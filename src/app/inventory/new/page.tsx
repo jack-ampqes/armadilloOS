@@ -142,7 +142,7 @@ export default function NewProductPage() {
                   id="sku"
                   value={formData.sku}
                   onChange={handleChange}
-                  className="mt-1"
+                  className="mt-1 font-mono"
                   placeholder="e.g., ASP-001"
                   required
                 />

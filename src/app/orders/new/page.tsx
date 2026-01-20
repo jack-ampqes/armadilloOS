@@ -290,7 +290,7 @@ export default function NewOrderPage() {
                         <TableCell className="font-medium">
                           {item.product.name}
                         </TableCell>
-                        <TableCell className="text-white/70">
+                        <TableCell className="text-white/70 font-mono">
                           {item.product.sku}
                         </TableCell>
                         <TableCell>

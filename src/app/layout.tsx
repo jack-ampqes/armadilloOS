@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Michroma } from "next/font/google";
+import { Geist, Geist_Mono, Montserrat, Michroma } from "next/font/google";
 import "./globals.css";
 import ConditionalNavigation from "@/components/ConditionalNavigation";
 import ConditionalMain from "@/components/ConditionalMain";
@@ -12,6 +12,12 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const montserrat = Montserrat({
+  variable: "--font-montserrat",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 const michroma = Michroma({
@@ -33,7 +39,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${michroma.variable} antialiased bg-[#181818] text-white`}
+        className={`${geistSans.variable} ${geistMono.variable} ${michroma.variable} ${montserrat.variable} antialiased bg-[#181818] text-white`}
       >
         <ConditionalNavigation />
         <ConditionalMain>

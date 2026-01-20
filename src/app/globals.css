@@ -31,14 +31,16 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-michroma: var(--font-michroma);
+  --font-montserrat: var(--font-montserrat);
 }
 
 body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   cursor: url('/cursor.png') 0 0, auto;
-  font-family: var(--font-michroma), sans-serif;
-  font-weight: 400;
+  font-family: var(--font-montserrat), sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 300;
   font-style: normal;
 }
 
