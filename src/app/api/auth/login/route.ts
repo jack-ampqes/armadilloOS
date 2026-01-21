@@ -43,10 +43,8 @@ export async function POST(request: NextRequest) {
     // Generate a simple token (in production, use JWT or similar)
     const token = crypto.randomBytes(32).toString('hex')
 
-    // Store token in database (optional, for session management)
-    // For now, we'll just return the token and let the client store it
-
-    return NextResponse.json({
+    // Create the response with user data
+    const response = NextResponse.json({
       token,
       user: {
         id: user.id,
@@ -55,6 +53,31 @@ export async function POST(request: NextRequest) {
         role: user.role || 'user',
       },
     })
+
+    // Set HTTP-only cookie for secure authentication
+    response.cookies.set('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    })
+
+    // Also set user info in a readable cookie for client-side access
+    response.cookies.set('user_info', JSON.stringify({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role || 'user',
+    }), {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    })
+
+    return response
   } catch (error) {
     console.error('Login error:', error)
     return NextResponse.json(

@@ -40,9 +40,17 @@ export default function Navigation() {
   const mobileSignOutRef = useRef<HTMLDivElement>(null)
   const desktopSignOutRef = useRef<HTMLDivElement>(null)
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
+    // Also clear any localStorage items
     localStorage.removeItem('auth_token')
     localStorage.removeItem('user_email')
+    localStorage.removeItem('user_name')
+    localStorage.removeItem('user_role')
     setShowSignOut(false)
     router.push('/login')
     router.refresh()
@@ -80,11 +88,11 @@ export default function Navigation() {
           >
             <div className="w-8 h-8 relative">
               <Image 
-                src="/armadillo-logo.png" 
+                src="/armadilloanimated.gif" 
                 alt="Armadillo Logo" 
                 fill
+                unoptimized
                 className="object-contain"
-                style={{ filter: 'brightness(0) invert(1)' }}
               />
             </div>
             <h1 className="text-lg font-bold text-white">Armadillo Safety</h1>
@@ -128,13 +136,13 @@ export default function Navigation() {
               onClick={() => setShowSignOut(!showSignOut)}
               className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
             >
-              <div className="w-10 h-10 relative flex-shrink-0">
+              <div className="w-58 h-20 relative flex-shrink-0">
                 <Image 
-                  src="/armadillo-logo.png" 
+                  src="/armadilloanimated.gif" 
                   alt="Armadillo Logo" 
                   fill
+                  unoptimized
                   className="object-contain"
-                  style={{ filter: 'brightness(0) invert(1)' }}
                 />
               </div>
             </button>

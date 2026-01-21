@@ -126,7 +126,8 @@ export async function POST(request: NextRequest) {
     // Generate a simple token (in production, use JWT or similar)
     const token = crypto.randomBytes(32).toString('hex')
 
-    return NextResponse.json({
+    // Create the response with user data
+    const response = NextResponse.json({
       token,
       user: {
         id: user.id,
@@ -135,6 +136,31 @@ export async function POST(request: NextRequest) {
         role: user.role || 'user',
       },
     })
+
+    // Set HTTP-only cookie for secure authentication
+    response.cookies.set('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    })
+
+    // Also set user info in a readable cookie for client-side access
+    response.cookies.set('user_info', JSON.stringify({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role || 'user',
+    }), {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    })
+
+    return response
   } catch (error) {
     console.error('Signup error:', error)
     const errorMessage = error instanceof Error ? error.message : 'An error occurred during sign up'

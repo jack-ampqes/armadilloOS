@@ -1,19 +1,22 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Suspense } from 'react'
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,7 +40,7 @@ export default function LoginPage() {
         return
       }
 
-      // Store session token
+      // Store session info in localStorage for client-side access
       if (data.token) {
         localStorage.setItem('auth_token', data.token)
         localStorage.setItem('user_email', data.user.email)
@@ -49,8 +52,8 @@ export default function LoginPage() {
         }
       }
 
-      // Redirect to dashboard
-      router.push('/')
+      // Redirect to the original page or dashboard
+      router.push(redirectTo)
       router.refresh()
     } catch (err) {
       setError('An error occurred. Please try again.')
@@ -63,10 +66,10 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center">
-          <div className="w-16 h-16 relative mb-4">
+          <div className="w-100 h-25 relative mb-4">
             <Image 
-              src="/armadillo-logo.png" 
-              alt="Armadillo Logo" 
+              src="/armadilloanimated.gif" 
+              alt="armadillOS Logo" 
               fill
               sizes="64px"
               loading="eager"
@@ -134,5 +137,17 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-[#181818]">
+        <div className="text-white">Loading...</div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   )
 }

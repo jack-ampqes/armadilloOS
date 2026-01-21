@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Pencil, AlertTriangle, RefreshCw, Minus } from 'lucide-react'
+import { Plus, Pencil, AlertTriangle, RefreshCw, Minus, PackagePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -297,23 +297,28 @@ export default function InventoryPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white">Inventory</h1>
-          <p className="mt-2 text-white/60">
-            Manage your safety products and track inventory levels.
-          </p>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
+          <Button variant="outline" asChild>
+            <Link href="/inventory/manufacturer-orders">
+            <PackagePlus size={16} aria-hidden="true" /> Manufacturer Orders
+            </Link>
+          </Button>
+
           <Button 
             variant="outline" 
             size="icon"
             onClick={() => fetchProducts()}
             disabled={loading}
             title="Refresh inventory"
+            className="group"
           >
-            <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-5 w-5 transition-transform duration-300 ${loading ? 'animate-spin' : 'group-hover:rotate-180'}`} />
           </Button>
-          <Button asChild>
+
+          <Button asChild size="icon">
             <Link href="/inventory/new" title="Add Product">
-              <Plus className="h-5 w-5" aria-hidden="true" />
+              <Plus size={20} aria-hidden="true" />
             </Link>
           </Button>
         </div>
