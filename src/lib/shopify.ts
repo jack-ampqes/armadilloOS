@@ -910,6 +910,347 @@ export async function getInventoryItem(
 }
 
 // ============================================
+// Draft Order Creation
+// ============================================
+
+export interface DraftOrderLineItem {
+  variantId?: string;
+  title?: string;
+  quantity: number;
+  originalUnitPrice?: string;
+  sku?: string;
+}
+
+export interface DraftOrderInput {
+  lineItems: DraftOrderLineItem[];
+  email?: string;
+  phone?: string;
+  note?: string;
+  tags?: string[];
+  shippingAddress?: {
+    firstName?: string;
+    lastName?: string;
+    address1: string;
+    address2?: string;
+    city: string;
+    province?: string;
+    country: string;
+    zip: string;
+    phone?: string;
+    company?: string;
+  };
+  billingAddress?: {
+    firstName?: string;
+    lastName?: string;
+    address1: string;
+    address2?: string;
+    city: string;
+    province?: string;
+    country: string;
+    zip: string;
+    phone?: string;
+    company?: string;
+  };
+  customAttributes?: Array<{ key: string; value: string }>;
+  taxExempt?: boolean;
+}
+
+export interface DraftOrder {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  status: string;
+  totalPrice: string;
+  subtotalPrice: string;
+  totalTax: string;
+  currencyCode: string;
+  note: string | null;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  invoiceUrl: string | null;
+  lineItems: Array<{
+    id: string;
+    title: string;
+    quantity: number;
+    originalUnitPrice: string;
+    sku: string | null;
+    variant?: {
+      id: string;
+      title: string;
+      sku: string | null;
+    };
+  }>;
+  shippingAddress: ShopifyAddress | null;
+  billingAddress: ShopifyAddress | null;
+  customer: {
+    id: string;
+    email: string | null;
+    firstName: string | null;
+    lastName: string | null;
+  } | null;
+}
+
+export async function createDraftOrder(
+  input: DraftOrderInput,
+  credentials?: ShopifyApiCredentials
+): Promise<DraftOrder> {
+  const mutation = `
+    mutation draftOrderCreate($input: DraftOrderInput!) {
+      draftOrderCreate(input: $input) {
+        draftOrder {
+          id
+          name
+          email
+          phone
+          status
+          totalPriceSet {
+            shopMoney {
+              amount
+              currencyCode
+            }
+          }
+          subtotalPriceSet {
+            shopMoney {
+              amount
+            }
+          }
+          totalTaxSet {
+            shopMoney {
+              amount
+            }
+          }
+          note
+          tags
+          createdAt
+          updatedAt
+          invoiceUrl
+          lineItems(first: 100) {
+            edges {
+              node {
+                id
+                title
+                quantity
+                originalUnitPriceSet {
+                  shopMoney {
+                    amount
+                  }
+                }
+                sku
+                variant {
+                  id
+                  title
+                  sku
+                }
+              }
+            }
+          }
+          shippingAddress {
+            firstName
+            lastName
+            address1
+            address2
+            city
+            province
+            country
+            zip
+            phone
+            company
+          }
+          billingAddress {
+            firstName
+            lastName
+            address1
+            address2
+            city
+            province
+            country
+            zip
+            phone
+            company
+          }
+          customer {
+            id
+            email
+            firstName
+            lastName
+          }
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+
+  // Build line items for the mutation
+  const lineItems = input.lineItems.map(item => {
+    const lineItem: Record<string, any> = {
+      quantity: item.quantity,
+    };
+    
+    if (item.variantId) {
+      // Use Shopify variant ID (must be in GID format)
+      lineItem.variantId = item.variantId.startsWith('gid://') 
+        ? item.variantId 
+        : `gid://shopify/ProductVariant/${item.variantId}`;
+    } else {
+      // Custom line item (not from Shopify catalog)
+      lineItem.title = item.title || 'Custom Item';
+      lineItem.originalUnitPrice = item.originalUnitPrice || '0.00';
+    }
+    
+    return lineItem;
+  });
+
+  const variables: Record<string, any> = {
+    input: {
+      lineItems,
+    },
+  };
+
+  // Add optional fields
+  if (input.email) variables.input.email = input.email;
+  if (input.phone) variables.input.phone = input.phone;
+  if (input.note) variables.input.note = input.note;
+  if (input.tags && input.tags.length > 0) variables.input.tags = input.tags;
+  if (input.taxExempt !== undefined) variables.input.taxExempt = input.taxExempt;
+  if (input.customAttributes) variables.input.customAttributes = input.customAttributes;
+  
+  if (input.shippingAddress) {
+    variables.input.shippingAddress = input.shippingAddress;
+  }
+  
+  if (input.billingAddress) {
+    variables.input.billingAddress = input.billingAddress;
+  }
+
+  const data = await shopifyGraphQL<{
+    draftOrderCreate: {
+      draftOrder: any;
+      userErrors: Array<{ field: string[]; message: string }>;
+    };
+  }>(mutation, variables, credentials);
+
+  if (data.draftOrderCreate.userErrors && data.draftOrderCreate.userErrors.length > 0) {
+    const errors = data.draftOrderCreate.userErrors.map(e => e.message).join(', ');
+    throw new Error(`Failed to create draft order: ${errors}`);
+  }
+
+  const order = data.draftOrderCreate.draftOrder;
+
+  return {
+    id: order.id,
+    name: order.name,
+    email: order.email,
+    phone: order.phone,
+    status: order.status,
+    totalPrice: order.totalPriceSet.shopMoney.amount,
+    subtotalPrice: order.subtotalPriceSet.shopMoney.amount,
+    totalTax: order.totalTaxSet.shopMoney.amount,
+    currencyCode: order.totalPriceSet.shopMoney.currencyCode,
+    note: order.note,
+    tags: order.tags || [],
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+    invoiceUrl: order.invoiceUrl,
+    lineItems: order.lineItems.edges.map(({ node }: any) => ({
+      id: node.id,
+      title: node.title,
+      quantity: node.quantity,
+      originalUnitPrice: node.originalUnitPriceSet.shopMoney.amount,
+      sku: node.sku,
+      variant: node.variant ? {
+        id: node.variant.id,
+        title: node.variant.title,
+        sku: node.variant.sku,
+      } : undefined,
+    })),
+    shippingAddress: order.shippingAddress ? {
+      first_name: order.shippingAddress.firstName || '',
+      last_name: order.shippingAddress.lastName || '',
+      address1: order.shippingAddress.address1 || '',
+      address2: order.shippingAddress.address2,
+      city: order.shippingAddress.city || '',
+      province: order.shippingAddress.province || '',
+      country: order.shippingAddress.country || '',
+      zip: order.shippingAddress.zip || '',
+      phone: order.shippingAddress.phone,
+      company: order.shippingAddress.company,
+    } : null,
+    billingAddress: order.billingAddress ? {
+      first_name: order.billingAddress.firstName || '',
+      last_name: order.billingAddress.lastName || '',
+      address1: order.billingAddress.address1 || '',
+      address2: order.billingAddress.address2,
+      city: order.billingAddress.city || '',
+      province: order.billingAddress.province || '',
+      country: order.billingAddress.country || '',
+      zip: order.billingAddress.zip || '',
+      phone: order.billingAddress.phone,
+      company: order.billingAddress.company,
+    } : null,
+    customer: order.customer ? {
+      id: order.customer.id,
+      email: order.customer.email,
+      firstName: order.customer.firstName,
+      lastName: order.customer.lastName,
+    } : null,
+  };
+}
+
+export async function completeDraftOrder(
+  draftOrderId: string,
+  paymentPending?: boolean,
+  credentials?: ShopifyApiCredentials
+): Promise<ShopifyOrder> {
+  const mutation = `
+    mutation draftOrderComplete($id: ID!, $paymentPending: Boolean) {
+      draftOrderComplete(id: $id, paymentPending: $paymentPending) {
+        draftOrder {
+          id
+          order {
+            id
+            name
+          }
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+
+  const id = draftOrderId.startsWith('gid://') 
+    ? draftOrderId 
+    : `gid://shopify/DraftOrder/${draftOrderId}`;
+
+  const data = await shopifyGraphQL<{
+    draftOrderComplete: {
+      draftOrder: { id: string; order: { id: string; name: string } | null };
+      userErrors: Array<{ field: string[]; message: string }>;
+    };
+  }>(mutation, { id, paymentPending: paymentPending ?? true }, credentials);
+
+  if (data.draftOrderComplete.userErrors && data.draftOrderComplete.userErrors.length > 0) {
+    const errors = data.draftOrderComplete.userErrors.map(e => e.message).join(', ');
+    throw new Error(`Failed to complete draft order: ${errors}`);
+  }
+
+  const orderId = data.draftOrderComplete.draftOrder.order?.id;
+  if (!orderId) {
+    throw new Error('Draft order completed but no order was created');
+  }
+
+  // Fetch the complete order details
+  const numericId = orderId.split('/').pop() || orderId;
+  return getOrder(numericId, credentials);
+}
+
+// ============================================
 // Utility Functions
 // ============================================
 

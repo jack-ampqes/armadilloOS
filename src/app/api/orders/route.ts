@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getOrders as getShopifyOrders } from '@/lib/shopify'
+import { getOrders as getShopifyOrders, createDraftOrder, completeDraftOrder, DraftOrderInput } from '@/lib/shopify'
 import { getDefaultShopifyCredentials } from '@/lib/shopify-connection'
 
 export async function GET(request: NextRequest) {
@@ -141,15 +141,166 @@ function mapShopifyStatus(
   return 'UNFULFILLED'
 }
 
-// Note: Order creation should be done through Shopify API
-// This endpoint is now read-only for Shopify orders
+// Create a new draft order in Shopify
 export async function POST(request: NextRequest) {
-  return NextResponse.json(
-    { 
-      error: 'Order creation not supported via this endpoint',
-      message: 'Orders must be created through Shopify. Use the Shopify Admin API or Storefront API to create orders.'
-    },
-    { status: 405 }
-  )
+  try {
+    const body = await request.json()
+    const { 
+      orderItems, 
+      customerEmail, 
+      customerPhone,
+      shippingAddress,
+      billingAddress,
+      notes,
+      tags,
+      salesRepName,
+      completeOrder,
+    } = body
+
+    // Validate required fields
+    if (!orderItems || !Array.isArray(orderItems) || orderItems.length === 0) {
+      return NextResponse.json(
+        { error: 'At least one order item is required' },
+        { status: 400 }
+      )
+    }
+
+    const credentials = await getDefaultShopifyCredentials()
+
+    // Build line items for draft order
+    const lineItems = orderItems.map((item: any) => {
+      // If we have a Shopify variant ID, use it
+      if (item.shopifyVariantId) {
+        return {
+          variantId: item.shopifyVariantId,
+          quantity: item.quantity,
+        }
+      }
+      
+      // Otherwise create a custom line item
+      return {
+        title: item.productName || item.title || 'Custom Item',
+        quantity: item.quantity,
+        originalUnitPrice: item.unitPrice?.toString() || '0.00',
+        sku: item.sku,
+      }
+    })
+
+    // Build custom attributes for additional info
+    const customAttributes: Array<{ key: string; value: string }> = []
+    if (salesRepName) {
+      customAttributes.push({ key: 'Sales Rep', value: salesRepName })
+    }
+
+    // Build draft order input
+    const draftOrderInput: DraftOrderInput = {
+      lineItems,
+      email: customerEmail,
+      phone: customerPhone,
+      note: notes,
+      tags: tags ? (Array.isArray(tags) ? tags : [tags]) : undefined,
+      customAttributes: customAttributes.length > 0 ? customAttributes : undefined,
+    }
+
+    // Add shipping address if provided
+    if (shippingAddress && shippingAddress.address1) {
+      draftOrderInput.shippingAddress = {
+        firstName: shippingAddress.firstName,
+        lastName: shippingAddress.lastName,
+        address1: shippingAddress.address1,
+        address2: shippingAddress.address2,
+        city: shippingAddress.city,
+        province: shippingAddress.state || shippingAddress.province,
+        country: shippingAddress.country || 'US',
+        zip: shippingAddress.zip || shippingAddress.zipCode,
+        phone: shippingAddress.phone,
+        company: shippingAddress.company,
+      }
+    }
+
+    // Add billing address if provided
+    if (billingAddress && billingAddress.address1) {
+      draftOrderInput.billingAddress = {
+        firstName: billingAddress.firstName,
+        lastName: billingAddress.lastName,
+        address1: billingAddress.address1,
+        address2: billingAddress.address2,
+        city: billingAddress.city,
+        province: billingAddress.state || billingAddress.province,
+        country: billingAddress.country || 'US',
+        zip: billingAddress.zip || billingAddress.zipCode,
+        phone: billingAddress.phone,
+        company: billingAddress.company,
+      }
+    }
+
+    // Create the draft order
+    const draftOrder = await createDraftOrder(draftOrderInput, {
+      shopDomain: credentials.shopDomain,
+      accessToken: credentials.accessToken,
+    })
+
+    // If completeOrder is true, convert draft to real order (payment pending)
+    if (completeOrder) {
+      const completedOrder = await completeDraftOrder(
+        draftOrder.id,
+        true, // paymentPending = true (mark as awaiting payment)
+        {
+          shopDomain: credentials.shopDomain,
+          accessToken: credentials.accessToken,
+        }
+      )
+
+      return NextResponse.json({
+        success: true,
+        orderType: 'completed',
+        order: {
+          id: `shopify-${completedOrder.id}`,
+          orderNumber: completedOrder.name,
+          status: 'UNFULFILLED',
+          totalAmount: parseFloat(completedOrder.total_price),
+          createdAt: completedOrder.created_at,
+        },
+      }, { status: 201 })
+    }
+
+    // Return the draft order
+    return NextResponse.json({
+      success: true,
+      orderType: 'draft',
+      draftOrder: {
+        id: draftOrder.id,
+        name: draftOrder.name,
+        status: draftOrder.status,
+        totalPrice: parseFloat(draftOrder.totalPrice),
+        invoiceUrl: draftOrder.invoiceUrl,
+        createdAt: draftOrder.createdAt,
+        lineItems: draftOrder.lineItems,
+      },
+    }, { status: 201 })
+
+  } catch (error) {
+    console.error('Error creating order:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+
+    // Check if it's a credentials error
+    if (errorMessage.includes('Missing Shopify credentials') || errorMessage.includes('not configured')) {
+      return NextResponse.json(
+        { 
+          error: 'Shopify integration not configured',
+          message: errorMessage
+        },
+        { status: 400 }
+      )
+    }
+
+    return NextResponse.json(
+      { 
+        error: 'Failed to create order',
+        message: errorMessage
+      },
+      { status: 500 }
+    )
+  }
 }
 

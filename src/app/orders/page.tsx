@@ -201,87 +201,8 @@ export default function OrdersPage() {
           </Button>
         </div>
       </div>
-
-      {/* Shopify Connection Status */}
-      {shopifyConnection?.connected && (
-        <Card 
-          className="cursor-pointer hover:bg-white/5 transition-colors"
-          onClick={() => setShowScopes(!showScopes)}
-        >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <Badge variant="success" className="text-xs">
-                  Shopify Connected
-                </Badge>
-                {shopifyConnection.shop && (
-                  <span className="text-white/80 text-sm">
-                    {shopifyConnection.shop}
-                  </span>
-                )}
-                {shopifyConnection.scope && (
-                  <span className="text-white/40 text-sm">
-                    ({shopifyConnection.scope.split(',').length} permissions)
-                  </span>
-                )}
-              </div>
-              {showScopes ? (
-                <ChevronUp className="w-5 h-5 text-white/60" />
-              ) : (
-                <ChevronDown className="w-5 h-5 text-white/60" />
-              )}
-            </div>
-            {showScopes && shopifyConnection.scope && (
-              <div className="mt-4 p-3 bg-white/5 rounded-lg">
-                <div className="flex flex-wrap gap-2">
-                  {shopifyConnection.scope.split(',').map((scope, idx) => (
-                    <Badge
-                      key={idx}
-                      variant="outline"
-                      className="text-xs font-mono bg-white/5 text-white/70"
-                    >
-                      {scope.trim()}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Error Message */}
-      {error && (
-        <Card className="border-red-500/50 bg-red-500/10">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <p className="text-red-400 font-medium">Error loading orders</p>
-                <p className="text-red-300/80 text-sm mt-1">{error}</p>
-                {(error.includes('not configured') || error.includes('Missing Shopify credentials')) && (
-                  <p className="text-red-300/60 text-xs mt-2">
-                    Please add SHOPIFY_STORE_DOMAIN and SHOPIFY_ACCESS_TOKEN to your .env.local file and restart the server.
-                  </p>
-                )}
-                {(error.includes('Invalid API key') || error.includes('401') || error.includes('unrecognized login')) && (
-                  <div className="text-red-300/60 text-xs mt-2 space-y-1">
-                    <p>Your Shopify credentials are invalid. Please check:</p>
-                    <ul className="list-disc list-inside ml-2 space-y-1">
-                      <li>SHOPIFY_STORE_DOMAIN should be your store domain (e.g., "your-store.myshopify.com")</li>
-                      <li>SHOPIFY_ACCESS_TOKEN should be a valid Admin API access token</li>
-                      <li>Make sure you've restarted the dev server after adding credentials</li>
-                    </ul>
-                  </div>
-                )}
-              </div>
-              <Button variant="outline" size="sm" onClick={() => fetchOrders()}>
-                Retry
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
+      
+          
       {/* Search Bar */}
       <div className="relative">
         <Input

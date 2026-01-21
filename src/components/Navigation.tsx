@@ -15,6 +15,7 @@ import {
   QrCode,
   LogOut,
   User,
+  ScrollText
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -23,6 +24,7 @@ import { useState, useEffect, useRef } from 'react'
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
   { name: 'Orders', href: '/orders', icon: ShoppingCart },
+  { name: 'Quotes', href: '/quotes', icon: ScrollText },
   { name: 'Inventory', href: '/inventory', icon: CirclePile },
   { name: 'Codes', href: '/inventory/codes', icon: QrCode },
   { name: 'Customers', href: '/customers', icon: Handshake },

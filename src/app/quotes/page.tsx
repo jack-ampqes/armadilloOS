@@ -1,0 +1,279 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { motion } from 'framer-motion'
+import { Plus, RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+
+interface QuoteItem {
+  id: string
+  productName: string
+  sku: string | null
+  quantity: number
+  unitPrice: number
+  totalPrice: number
+}
+
+interface Quote {
+  id: string
+  quoteNumber: string
+  status: string
+  customerName: string
+  customerEmail: string | null
+  customerAddress: string | null
+  customerCity: string | null
+  customerState: string | null
+  subtotal: number
+  discountType: string | null
+  discountValue: number | null
+  discountAmount: number
+  total: number
+  validUntil: string | null
+  createdAt: string
+  notes: string | null
+  quoteItems: QuoteItem[]
+}
+
+export default function QuotesPage() {
+  const [quotes, setQuotes] = useState<Quote[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchQuotes()
+  }, [])
+
+  const fetchQuotes = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/quotes')
+      
+      if (response.ok) {
+        const data = await response.json()
+        setQuotes(Array.isArray(data) ? data : [])
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        setError(errorData.error || 'Failed to load quotes')
+        setQuotes([])
+      }
+    } catch (error) {
+      console.error('Error fetching quotes:', error)
+      setError('Failed to connect to server')
+      setQuotes([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filteredQuotes = quotes.filter(quote =>
+    quote.quoteNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    quote.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    quote.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (quote.customerEmail?.toLowerCase().includes(searchTerm.toLowerCase()))
+  )
+
+  const getStatusVariant = (status: string): "default" | "secondary" | "outline" | "success" | "warning" | "destructive" => {
+    switch (status) {
+      case 'ACCEPTED':
+        return 'success'
+      case 'DRAFT':
+        return 'default'
+      case 'SENT':
+        return 'warning'
+      case 'REJECTED':
+      case 'EXPIRED':
+        return 'destructive'
+      default:
+        return 'secondary'
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString()
+  }
+
+  const isExpired = (validUntil: string | null) => {
+    if (!validUntil) return false
+    return new Date(validUntil) < new Date()
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <Skeleton className="h-16 w-16 rounded-full" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-8 max-w-7xl">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-white">
+            Quotes
+          </h1>
+        </div>
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => fetchQuotes()}
+            disabled={loading}
+            title="Refresh quotes"
+          >
+            <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button asChild>
+            <Link href="/quotes/new" title="Create Quote">
+              <Plus className="h-5 w-5" aria-hidden="true" />
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      {/* Error Message */}
+      {error && (
+        <Card className="border-red-500/50 bg-red-500/10">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <p className="text-red-400 font-medium">Error loading quotes</p>
+                <p className="text-red-300/80 text-sm mt-1">{error}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => fetchQuotes()}>
+                Retry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Search Bar */}
+      <div className="relative">
+        <Input
+          type="text"
+          placeholder="Search quotes by number, customer, or status..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full"
+        />
+      </div>
+
+      {/* Quotes Grid */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+        className="grid gap-4"
+      >
+        {filteredQuotes.map((quote, index) => (
+          <motion.div
+            key={quote.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 * index }}
+          >
+            <Link href={`/quotes/${quote.id}`}>
+              <Card className="group cursor-pointer hover:bg-white/5 transition-colors">
+                <CardContent className="p-6">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    {/* Quote Info */}
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-xl font-bold text-white">
+                          {quote.quoteNumber}
+                        </h3>
+                        <Badge variant={getStatusVariant(quote.status)}>
+                          {quote.status}
+                        </Badge>
+                        {quote.validUntil && isExpired(quote.validUntil) && quote.status !== 'EXPIRED' && (
+                          <Badge variant="destructive" className="text-xs">
+                            Expired
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <p className="text-white font-medium">{quote.customerName}</p>
+                        {quote.customerEmail && (
+                          <p className="text-white/60 text-sm">{quote.customerEmail}</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-4 text-sm">
+                        <span className="text-white/60">
+                          {quote.quoteItems.length} item{quote.quoteItems.length !== 1 ? 's' : ''}
+                        </span>
+                        <span className="text-white/40">•</span>
+                        <span className="text-white/60">
+                          Created: {formatDate(quote.createdAt)}
+                        </span>
+                        {quote.validUntil && (
+                          <>
+                            <span className="text-white/40">•</span>
+                            <span className={`${isExpired(quote.validUntil) ? 'text-red-400' : 'text-white/60'}`}>
+                              Valid until: {formatDate(quote.validUntil)}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Amount */}
+                    <div className="text-right">
+                      {quote.discountAmount > 0 && (
+                        <p className="text-sm text-white/40 line-through">
+                          ${quote.subtotal.toFixed(2)}
+                        </p>
+                      )}
+                      <p className="text-sm text-white/60">Total</p>
+                      <p className="text-2xl font-bold text-white">
+                        ${quote.total.toFixed(2)}
+                      </p>
+                      {quote.discountAmount > 0 && (
+                        <p className="text-sm text-green-400">
+                          -{quote.discountType === 'percentage' ? `${quote.discountValue}%` : `$${quote.discountAmount.toFixed(2)}`} discount
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          </motion.div>
+        ))}
+      </motion.div>
+
+      {filteredQuotes.length === 0 && !error && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <Card className="text-center py-16">
+            <CardContent>
+              <div className="w-20 h-20 mx-auto mb-6 bg-white rounded-xl flex items-center justify-center">
+                <Plus className="w-10 h-10 text-black" />
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-2">No quotes found</h3>
+              <p className="text-white/60 mb-6">Get started by creating your first quote.</p>
+              <Button asChild>
+                <Link href="/quotes/new" title="Create Quote">
+                  <Plus className="w-5 h-5 mr-2" />
+                  New Quote
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+    </div>
+  )
+}
