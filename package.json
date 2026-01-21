@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
+    "postinstall": "prisma generate",
     "import-products": "tsx scripts/import-products.ts"
   },
   "dependencies": {
@@ -35,10 +36,10 @@
     "react-dom": "19.2.0",
     "react-hook-form": "^7.66.1",
     "tailwind-merge": "^3.4.0",
-    "zod": "^4.1.13"
+    "zod": "^4.1.13",
+    "@prisma/client": "^5.22.0"
   },
   "devDependencies": {
-    "@prisma/client": "^5.22.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
