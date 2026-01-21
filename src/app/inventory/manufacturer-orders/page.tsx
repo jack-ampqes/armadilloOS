@@ -555,10 +555,11 @@ export default function ManufacturerOrdersPage() {
           </div>
           <Button 
             onClick={openNewOrderModal}
+            className="transition-opacity hover:opacity-70"
             style={colorVariants ? { 
               backgroundColor: colorVariants.base,
               color: colorVariants.text,
-              borderColor: colorVariants.base
+              borderColor: '#181818'
             } : undefined}
           >
             <Plus className="h-5 w-5 mr-2" />

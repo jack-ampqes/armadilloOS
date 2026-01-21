@@ -122,20 +122,24 @@ export default function QuotesPage() {
           </h1>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
-          <Button 
+
+        <Button 
             variant="outline" 
             size="icon"
             onClick={() => fetchQuotes()}
             disabled={loading}
             title="Refresh quotes"
+            className="group"
           >
-            <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-5 w-5 transition-transform duration-300 ${loading ? 'animate-spin' : 'group-hover:rotate-180'}`} />
           </Button>
-          <Button asChild>
-            <Link href="/quotes/new" title="Create Quote">
-              <Plus className="h-5 w-5" aria-hidden="true" />
+
+          <Button asChild size="icon">
+            <Link href="/inventory/new" title="Add Product">
+              <Plus size={20} aria-hidden="true" />
             </Link>
           </Button>
+
         </div>
       </div>
 
@@ -257,13 +261,10 @@ export default function QuotesPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         >
-          <Card className="text-center py-16">
+          <Card className="text-center py-16 border-none">
             <CardContent>
-              <div className="w-20 h-20 mx-auto mb-6 bg-white rounded-xl flex items-center justify-center">
-                <Plus className="w-10 h-10 text-black" />
-              </div>
+              <img src="/shrug.png" alt="armadillo" className="w-75 h-75 mx-auto mb-6" />
               <h3 className="text-2xl font-bold text-white mb-2">No quotes found</h3>
-              <p className="text-white/60 mb-6">Get started by creating your first quote.</p>
               <Button asChild>
                 <Link href="/quotes/new" title="Create Quote">
                   <Plus className="w-5 h-5 mr-2" />

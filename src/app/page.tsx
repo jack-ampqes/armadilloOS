@@ -7,6 +7,7 @@ import {
   Tags, 
   Warehouse,
   CirclePile,
+  FileText,
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -16,6 +17,12 @@ export default function Dashboard() {
       description: "Create, view, and process customer orders",
       href: "/orders",
       icon: ShoppingCart
+    },
+    {
+      title: "Quotes",
+      description: "Create and manage customer quotes",
+      href: "/quotes",
+      icon: FileText
     },
     {
       title: "Inventory",

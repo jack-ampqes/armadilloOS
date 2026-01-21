@@ -301,7 +301,7 @@ export default function InventoryPage() {
         <div className="flex items-center gap-3 self-start sm:self-auto">
           <Button variant="outline" asChild>
             <Link href="/inventory/manufacturer-orders">
-            <PackagePlus size={16} aria-hidden="true" /> Manufacturer Orders
+            <PackagePlus size={20} aria-hidden="true" /> Manufacturer Orders
             </Link>
           </Button>
 
@@ -321,6 +321,7 @@ export default function InventoryPage() {
               <Plus size={20} aria-hidden="true" />
             </Link>
           </Button>
+          
         </div>
       </div>
 
