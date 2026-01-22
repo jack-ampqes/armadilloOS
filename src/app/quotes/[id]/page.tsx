@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, FileText, Trash2, Send, Check, X, Download } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, FileText, Trash2, Send, Check, X, Download, Edit } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -184,7 +184,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     doc.setTextColor(255, 255, 255)
     doc.setFontSize(24)
     doc.setFont('helvetica', 'bold')
-    doc.text('QUOTE', 20, 25)
+    doc.addImage('/Armadillo_FullLogo_White.png', 'PNG', 10, 18, 50, 12)
     
     doc.setFontSize(12)
     doc.setFont('helvetica', 'normal')
@@ -208,6 +208,21 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       yPos += 6
       doc.text(`Valid Until: ${formatDate(quote.validUntil)}`, 20, yPos)
     }
+    
+    // Ship From section
+    yPos += 15
+    doc.setTextColor(...darkColor)
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.text('SHIP FROM:', 20, yPos)
+    
+    doc.setFont('helvetica', 'normal')
+    yPos += 7
+    doc.text('Jack Lyons', 20, yPos)
+    yPos += 5
+    doc.text('616 Church St NE', 20, yPos)
+    yPos += 5
+    doc.text('Decatur, AL 35601 USA', 20, yPos)
     
     // Customer info box
     yPos = 55
@@ -389,6 +404,14 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
         </div>
         
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => router.push(`/quotes/${id}/edit`)}
+            className="gap-2"
+          >
+            <Edit className="h-4 w-4" />
+            Edit
+          </Button>
           <Button
             variant="outline"
             onClick={downloadPDF}
