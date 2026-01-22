@@ -88,11 +88,13 @@ export default function Navigation() {
           >
             <div className="w-8 h-8 relative">
               <Image 
-                src="/armadilloanimated.gif" 
-                alt="Armadillo Logo" 
-                fill
-                unoptimized
-                className="object-contain"
+                  src="/armadilloware.gif" 
+                  alt="Armadillo Logo" 
+                  fill
+                  unoptimized
+                  loading="eager"
+                  priority
+                  className="object-contain"
               />
             </div>
             <h1 className="text-lg font-bold text-white">Armadillo Safety</h1>
@@ -136,12 +138,14 @@ export default function Navigation() {
               onClick={() => setShowSignOut(!showSignOut)}
               className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
             >
-              <div className="w-58 h-20 relative flex-shrink-0">
+              <div className="w-58 h-30 relative flex-shrink-0">
                 <Image 
-                  src="/armadilloanimated.gif" 
+                  src="/armadilloware.gif" 
                   alt="Armadillo Logo" 
                   fill
                   unoptimized
+                  loading="eager"
+                  priority
                   className="object-contain"
                 />
               </div>
