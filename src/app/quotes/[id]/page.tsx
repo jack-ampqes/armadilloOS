@@ -184,13 +184,18 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     doc.setTextColor(255, 255, 255)
     doc.setFontSize(24)
     doc.setFont('helvetica', 'bold')
-    doc.addImage('/Armadillo_FullLogo_White.png', 'PNG', 10, 18, 50, 12)
+    doc.addImage('/Armadillo_FullLogo_White.png', 'PNG', 10, 12, 50, 12)
     
-    doc.setFontSize(12)
+    doc.setFontSize(10)
+    doc.setTextColor(255, 255, 255)
     doc.setFont('helvetica', 'normal')
-    doc.text(quote.quoteNumber, pageWidth - 20, 20, { align: 'right' })
-    doc.text(`Status: ${quote.status}`, pageWidth - 20, 28, { align: 'right' })
-    
+    doc.text(quote.quoteNumber, pageWidth - 20, 10, { align: 'right' })
+    doc.text(`Status: ${quote.status}`, pageWidth - 20, 18, { align: 'right' })
+    doc.text(`Date: ${formatDate(quote.createdAt)}`, pageWidth - 20, 26, { align: 'right' })
+    if (quote.validUntil) {
+      doc.text(`Valid Until: ${formatDate(quote.validUntil)}`, pageWidth - 20, 34, { align: 'right' })
+    }
+
     // Company info
     let yPos = 55
     doc.setTextColor(...darkColor)
@@ -203,51 +208,44 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(...grayColor)
     yPos += 10
-    doc.text(`Date: ${formatDate(quote.createdAt)}`, 20, yPos)
-    if (quote.validUntil) {
-      yPos += 6
-      doc.text(`Valid Until: ${formatDate(quote.validUntil)}`, 20, yPos)
-    }
     
-    // Ship From section
-    yPos += 15
+    // Ship From section (right column)
+    let rightYPos = 55
     doc.setTextColor(...darkColor)
     doc.setFontSize(10)
     doc.setFont('helvetica', 'bold')
-    doc.text('SHIP FROM:', 20, yPos)
+    doc.text('Armadillo Safety Products:', pageWidth - 80, rightYPos)
     
     doc.setFont('helvetica', 'normal')
-    yPos += 7
-    doc.text('Jack Lyons', 20, yPos)
-    yPos += 5
-    doc.text('616 Church St NE', 20, yPos)
-    yPos += 5
-    doc.text('Decatur, AL 35601 USA', 20, yPos)
+    rightYPos += 5
+    doc.text('PO Box 1725', pageWidth - 80, rightYPos)
+    rightYPos += 5
+    doc.text('Decatur, AL 35602 USA', pageWidth - 80, rightYPos)
     
-    // Customer info box
-    yPos = 55
+    // Customer info box (BILL TO)
+    rightYPos += 12
     doc.setTextColor(...darkColor)
     doc.setFontSize(10)
     doc.setFont('helvetica', 'bold')
-    doc.text('BILL TO:', pageWidth - 80, yPos)
+    doc.text('BILL TO:', pageWidth - 80, rightYPos)
     
     doc.setFont('helvetica', 'normal')
-    yPos += 7
-    doc.text(quote.customerName, pageWidth - 80, yPos)
+    rightYPos += 7
+    doc.text(quote.customerName, pageWidth - 80, rightYPos)
     
     if (quote.customerEmail) {
-      yPos += 5
+      rightYPos += 5
       doc.setTextColor(...grayColor)
-      doc.text(quote.customerEmail, pageWidth - 80, yPos)
+      doc.text(quote.customerEmail, pageWidth - 80, rightYPos)
     }
     if (quote.customerPhone) {
-      yPos += 5
-      doc.text(quote.customerPhone, pageWidth - 80, yPos)
+      rightYPos += 5
+      doc.text(quote.customerPhone, pageWidth - 80, rightYPos)
     }
     if (getFullAddress()) {
-      yPos += 5
+      rightYPos += 5
       const addressLines = doc.splitTextToSize(getFullAddress()!, 60)
-      doc.text(addressLines, pageWidth - 80, yPos)
+      doc.text(addressLines, pageWidth - 80, rightYPos)
     }
     
     // Items table
@@ -260,7 +258,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     ])
     
     autoTable(doc, {
-      startY: 100,
+      startY: 120,
       head: [['Product', 'SKU', 'Qty', 'Unit Price', 'Total']],
       body: tableData,
       theme: 'striped',
@@ -456,7 +454,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
           <Button
             variant="outline"
             onClick={deleteQuote}
-            className="gap-2 text-red-400 hover:bg-red-500/10"
+            className="gap-2 text-red-400 hover:bg-red-500/20"
           >
             <Trash2 className="h-4 w-4" />
             Delete

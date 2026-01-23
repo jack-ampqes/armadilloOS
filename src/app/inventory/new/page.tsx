@@ -70,7 +70,11 @@ export default function NewProductPage() {
         router.push('/inventory')
       } else {
         const error = await response.json()
-        alert(`Error creating product: ${error.error}`)
+        const errorMessage = error.message || error.error || 'Unknown error'
+        const errorDetails = error.details ? `\n\nDetails: ${error.details}` : ''
+        const errorHint = error.hint ? `\n\nHint: ${error.hint}` : ''
+        alert(`Error creating product: ${errorMessage}${errorDetails}${errorHint}`)
+        console.error('Product creation error:', error)
       }
     } catch (error) {
       console.error('Error creating product:', error)
@@ -153,7 +157,7 @@ export default function NewProductPage() {
                   Category
                 </Label>
                 <Select
-                  value={formData.category || undefined}
+                  value={formData.category || ''}
                   onValueChange={(value) => handleSelectChange('category', value)}
                 >
                   <SelectTrigger className="mt-1">

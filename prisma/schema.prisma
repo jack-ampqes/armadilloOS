@@ -180,3 +180,31 @@ model QuoteItem {
   @@map("quote_items")
 }
 
+model Alert {
+  id          String   @id @default(cuid())
+  type        String   // 'low_stock', 'out_of_stock', 'pending_order', 'quote_expired', 'manufacturer_order'
+  severity    String   // 'critical', 'warning', 'info'
+  title       String
+  message     String
+  entityType  String?  // 'product', 'order', 'quote', 'manufacturer_order'
+  entityId    String?
+  read        Boolean  @default(false)
+  resolved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
+
+  @@map("alerts")
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  action      String   // 'created', 'updated', 'deleted'
+  entityType  String   // 'order', 'quote', 'inventory', 'product', 'customer'
+  entityId    String
+  userId      String?
+  details     String?  // JSON string with change details
+  createdAt   DateTime @default(now())
+
+  @@map("activity_logs")
+}
+

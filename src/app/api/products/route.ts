@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabase, supabaseAdmin } from '@/lib/supabase'
 import { getProducts as getShopifyProducts, getProduct as getShopifyProduct } from '@/lib/shopify'
 import { getDefaultShopifyCredentials } from '@/lib/shopify-connection'
 
@@ -119,39 +119,143 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, description, sku, price, color, leadtime, quantity, minStock, location } = body
+    const { name, description, sku, price, category, quantity, minStock, location } = body
+
+    // Validate required fields
+    if (!name || !sku || price === undefined) {
+      return NextResponse.json(
+        { error: 'Missing required fields: name, sku, and price are required' },
+        { status: 400 }
+      )
+    }
 
     // Create product using RPC function
-    const { data: productData, error: productError } = await supabase.rpc('insert_product', {
+    // Note: The insert_product RPC expects color and leadtime, but we're receiving category
+    // We'll pass null for color and leadtime since category isn't in the products table
+    // Use supabaseAdmin for RPC calls to ensure proper permissions
+    const { data: productData, error: productError } = await supabaseAdmin.rpc('insert_product', {
       product_sku: sku,
       product_name: name,
       product_description: description || null,
-      product_price: price || 0,
-      product_color: color || null,
-      product_leadtime: leadtime || null
+      product_price: parseFloat(price.toString()) || 0,
+      product_color: null, // Category is not stored in products table
+      product_leadtime: null
     })
 
-    if (productError) throw productError
+    if (productError) {
+      console.error('Error creating product via RPC:', productError)
+      // If RPC fails, try direct insert as fallback
+      console.log('Attempting direct insert as fallback...')
+      const { data: directInsertData, error: directInsertError } = await supabaseAdmin
+        .schema('armadillo_inventory')
+        .from('products')
+        .insert({
+          sku: sku,
+          name: name,
+          description: description || null,
+          price: parseFloat(price.toString()) || 0,
+          color: null,
+          leadtime: null
+        })
+        .select()
+        .single()
+
+      if (directInsertError) {
+        console.error('Direct insert also failed:', directInsertError)
+        throw new Error(`Failed to create product: ${productError.message || productError}. Direct insert error: ${directInsertError.message || directInsertError}`)
+      }
+
+      // Use direct insert result
+      const product = directInsertData
+      if (!product) {
+        throw new Error('Product was not created successfully')
+      }
+
+      // Continue with inventory creation...
+      if (quantity !== undefined || minStock !== undefined || location !== undefined) {
+        const { error: inventoryError } = await supabaseAdmin
+          .schema('armadillo_inventory')
+          .from('inventory')
+          .upsert({
+            sku: sku,
+            name: name || null,
+            quantity: quantity !== undefined ? quantity : 0,
+            min_stock: minStock !== undefined ? minStock : null,
+            location: location || null,
+            price: price !== undefined ? parseFloat(price.toString()) : null,
+            category: category || null,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'sku'
+          })
+        
+        if (inventoryError) {
+          console.error('Error creating inventory:', inventoryError)
+        }
+      }
+
+      const { data: inventoryData } = await supabaseAdmin
+        .schema('armadillo_inventory')
+        .from('inventory')
+        .select('quantity, min_stock, location')
+        .eq('sku', sku)
+        .single()
+
+      return NextResponse.json({
+        id: product.sku,
+        name: product.name,
+        description: product.description,
+        sku: product.sku,
+        price: parseFloat(product.price),
+        color: product.color,
+        leadtime: product.leadtime,
+        category: category || null,
+        inventory: inventoryData ? {
+          quantity: inventoryData.quantity || 0,
+          minStock: inventoryData.min_stock || null,
+          location: inventoryData.location || null
+        } : null
+      }, { status: 201 })
+    }
     
     const product = productData?.[0] // RPC returns array, get first item
 
-    // Note: Inventory is tracked separately in armadillo_inventory.inventory table
-    // Use the update_stock function to update inventory quantities
-    let inventory = null
-    if (quantity !== undefined) {
-      // Call the update_stock function in armadillo_inventory schema
-      const { error: inventoryError } = await supabase.rpc('update_stock', {
-        target_sku: sku,
-        count_change: quantity || 0
-      })
-      
-      if (!inventoryError) {
-        inventory = {
+    if (!product) {
+      throw new Error('Product was not created successfully')
+    }
+
+    // Create/update inventory record with quantity, minStock, and location
+    // Use direct Supabase upsert to handle both creation and updates
+    if (quantity !== undefined || minStock !== undefined || location !== undefined) {
+      const { error: inventoryError } = await supabaseAdmin
+        .schema('armadillo_inventory')
+        .from('inventory')
+        .upsert({
           sku: sku,
-          quantity: quantity || 0
-        }
+          name: name || null,
+          quantity: quantity !== undefined ? quantity : 0,
+          min_stock: minStock !== undefined ? minStock : null,
+          location: location || null,
+          price: price !== undefined ? price : null,
+          category: category || null,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'sku'
+        })
+      
+      if (inventoryError) {
+        console.error('Error creating inventory:', inventoryError)
+        // Don't fail the request if inventory creation fails, but log it
       }
     }
+
+    // Fetch created inventory to return in response
+    const { data: inventoryData } = await supabaseAdmin
+      .schema('armadillo_inventory')
+      .from('inventory')
+      .select('quantity, min_stock, location')
+      .eq('sku', sku)
+      .single()
 
     // Return product with inventory in expected format
     const response = {
@@ -162,14 +266,28 @@ export async function POST(request: NextRequest) {
       price: parseFloat(product.price),
       color: product.color,
       leadtime: product.leadtime,
-      inventory
+      category: category || null,
+      inventory: inventoryData ? {
+        quantity: inventoryData.quantity || 0,
+        minStock: inventoryData.min_stock || null,
+        location: inventoryData.location || null
+      } : null
     }
 
     return NextResponse.json(response, { status: 201 })
   } catch (error) {
     console.error('Error creating product:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorDetails = error instanceof Error && 'details' in error ? (error as any).details : undefined
+    const errorHint = error instanceof Error && 'hint' in error ? (error as any).hint : undefined
+    
     return NextResponse.json(
-      { error: 'Failed to create product' },
+      { 
+        error: 'Failed to create product',
+        message: errorMessage,
+        details: errorDetails,
+        hint: errorHint
+      },
       { status: 500 }
     )
   }

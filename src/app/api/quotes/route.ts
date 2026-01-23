@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
+import { checkQuoteExpirationAlerts } from '@/lib/alerts'
 
 const prisma = new PrismaClient()
 
@@ -131,6 +132,14 @@ export async function POST(request: NextRequest) {
         quoteItems: true,
       },
     })
+
+    // Check for quote expiration alerts after creation
+    try {
+      await checkQuoteExpirationAlerts()
+    } catch (alertError) {
+      console.error('Error checking alerts after quote creation:', alertError)
+      // Don't fail the request if alert check fails
+    }
 
     return NextResponse.json(quote, { status: 201 })
   } catch (error) {

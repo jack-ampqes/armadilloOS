@@ -587,7 +587,7 @@ export default function ManufacturerOrdersPage() {
                     }`}
                     style={{ 
                       borderColor: isDragging 
-                        ? (colorVariants?.base || '#3b82f6') 
+                        ? (colorVariants?.base || '#808080') 
                         : (colorVariants?.border || 'rgba(255,255,255,0.2)'),
                       backgroundColor: isDragging 
                         ? (colorVariants?.light || 'rgba(59,130,246,0.1)') 

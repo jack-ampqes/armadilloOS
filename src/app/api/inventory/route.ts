@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { parseSkuToProduct } from '@/lib/sku-parser'
+import { checkLowStockAlerts } from '@/lib/alerts'
 
 export async function GET(request: NextRequest) {
   try {
@@ -166,6 +167,14 @@ export async function POST(request: NextRequest) {
         familyName: parsedSku.familyName,
         productType: parsedSku.productType
       } : null
+    }
+
+    // Check for low stock alerts after inventory update
+    try {
+      await checkLowStockAlerts()
+    } catch (alertError) {
+      console.error('Error checking alerts after inventory update:', alertError)
+      // Don't fail the request if alert check fails
     }
 
     return NextResponse.json(transformedInventory, { status: 201 })

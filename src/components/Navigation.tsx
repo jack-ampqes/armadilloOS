@@ -15,10 +15,13 @@ import {
   QrCode,
   LogOut,
   User,
-  ScrollText
+  ScrollText,
+  AlertTriangle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { AlertBell } from '@/components/AlertBell'
+import { SyncedGif } from '@/components/SyncedGif'
 import { useState, useEffect, useRef } from 'react'
 
 const navigation = [
@@ -30,6 +33,7 @@ const navigation = [
   { name: 'Customers', href: '/customers', icon: Handshake },
   { name: 'Sales Reps', href: '/sales-reps', icon: Tags },
   { name: 'Distributors', href: '/distributors', icon: Warehouse },
+  { name: 'Alerts', href: '/alerts', icon: AlertTriangle },
 ]
 
 export default function Navigation() {
@@ -87,12 +91,10 @@ export default function Navigation() {
             className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
           >
             <div className="w-8 h-8 relative">
-              <Image 
+              <SyncedGif 
                   src="/armadilloware.gif" 
                   alt="Armadillo Logo" 
-                  fill
                   unoptimized
-                  loading="eager"
                   priority
                   className="object-contain"
               />
@@ -120,36 +122,38 @@ export default function Navigation() {
             </div>
           )}
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        >
-          <Menu className="w-6 h-6 text-white" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <AlertBell />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            <Menu className="w-6 h-6 text-white" />
+          </Button>
+        </div>
       </div>
 
       {/* Sidebar */}
       <aside className="fixed left-0 top-0 bottom-0 z-40 bg-[#181818] border-r border-white/20 pt-6 w-[280px] hidden lg:block">
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="px-6 mb-8 flex items-center relative" ref={desktopSignOutRef}>
+          <div className="px-6 mb-8 flex items-center justify-between relative" ref={desktopSignOutRef}>
             <button
               onClick={() => setShowSignOut(!showSignOut)}
               className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
             >
               <div className="w-58 h-30 relative flex-shrink-0">
-                <Image 
+                <SyncedGif 
                   src="/armadilloware.gif" 
                   alt="Armadillo Logo" 
-                  fill
                   unoptimized
-                  loading="eager"
                   priority
                   className="object-contain"
                 />
               </div>
             </button>
+            <AlertBell />
             {showSignOut && (
               <div className="absolute top-full left-6 mt-2 bg-[#181818] border border-white/20 rounded-lg shadow-lg z-50 min-w-[180px] overflow-hidden">
                 <Link
