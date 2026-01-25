@@ -17,7 +17,6 @@ interface Product {
   price: number
   color?: string
   leadtime?: string
-  category?: string
   inventory?: {
     quantity: number
     minStock: number
@@ -171,12 +170,6 @@ export default function ProductDetailPage() {
               <p className="mt-1 text-white font-medium">${product.price.toFixed(2)}</p>
             </div>
 
-            {product.category && (
-              <div>
-                <label className="text-sm font-medium text-white/60">Category</label>
-                <p className="mt-1 text-white">{product.category}</p>
-              </div>
-            )}
 
             {product.color && (
               <div>

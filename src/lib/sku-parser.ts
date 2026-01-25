@@ -181,7 +181,9 @@ export function parseSkuToProduct(input: string): ParsedSku {
 
     const colorName = COLOR_MAP[colorCode] ?? colorCode;
 
-    const title = `${fam.familyName} ${fam.productType} · ${classCode} · ${inches}" · ${colorName} · Size ${size}`;
+    // Build product name, handling empty familyName
+    const productName = `${fam.familyName} ${fam.productType}`.trim();
+    const title = `${productName} · ${classCode} · ${inches}" · ${colorName} · Size ${size}`;
 
     return {
       original,

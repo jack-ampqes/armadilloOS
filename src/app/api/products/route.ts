@@ -119,159 +119,47 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, description, sku, price, category, quantity, minStock, location } = body
+    const { sku, price, color, leadtime, quantity } = body
 
     // Validate required fields
-    if (!name || !sku || price === undefined) {
+    if (!sku || price === undefined) {
       return NextResponse.json(
-        { error: 'Missing required fields: name, sku, and price are required' },
+        { error: 'Missing required fields: sku and price are required' },
         { status: 400 }
       )
     }
 
-    // Create product using RPC function
-    // Note: The insert_product RPC expects color and leadtime, but we're receiving category
-    // We'll pass null for color and leadtime since category isn't in the products table
-    // Use supabaseAdmin for RPC calls to ensure proper permissions
-    const { data: productData, error: productError } = await supabaseAdmin.rpc('insert_product', {
-      product_sku: sku,
-      product_name: name,
-      product_description: description || null,
-      product_price: parseFloat(price.toString()) || 0,
-      product_color: null, // Category is not stored in products table
-      product_leadtime: null
-    })
+    // Insert directly into inventory table with only the schema fields
+    const { data: productData, error: insertError } = await supabaseAdmin
+      .schema('armadillo_inventory')
+      .from('inventory')
+      .insert({
+        sku: sku,
+        price: parseFloat(price.toString()) || 0,
+        color: color || null,
+        leadtime: leadtime || null,
+        quantity: quantity !== undefined ? parseInt(quantity.toString()) : 0
+      })
+      .select()
+      .single()
 
-    if (productError) {
-      console.error('Error creating product via RPC:', productError)
-      // If RPC fails, try direct insert as fallback
-      console.log('Attempting direct insert as fallback...')
-      const { data: directInsertData, error: directInsertError } = await supabaseAdmin
-        .schema('armadillo_inventory')
-        .from('products')
-        .insert({
-          sku: sku,
-          name: name,
-          description: description || null,
-          price: parseFloat(price.toString()) || 0,
-          color: null,
-          leadtime: null
-        })
-        .select()
-        .single()
-
-      if (directInsertError) {
-        console.error('Direct insert also failed:', directInsertError)
-        throw new Error(`Failed to create product: ${productError.message || productError}. Direct insert error: ${directInsertError.message || directInsertError}`)
-      }
-
-      // Use direct insert result
-      const product = directInsertData
-      if (!product) {
-        throw new Error('Product was not created successfully')
-      }
-
-      // Continue with inventory creation...
-      if (quantity !== undefined || minStock !== undefined || location !== undefined) {
-        const { error: inventoryError } = await supabaseAdmin
-          .schema('armadillo_inventory')
-          .from('inventory')
-          .upsert({
-            sku: sku,
-            name: name || null,
-            quantity: quantity !== undefined ? quantity : 0,
-            min_stock: minStock !== undefined ? minStock : null,
-            location: location || null,
-            price: price !== undefined ? parseFloat(price.toString()) : null,
-            category: category || null,
-            updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'sku'
-          })
-        
-        if (inventoryError) {
-          console.error('Error creating inventory:', inventoryError)
-        }
-      }
-
-      const { data: inventoryData } = await supabaseAdmin
-        .schema('armadillo_inventory')
-        .from('inventory')
-        .select('quantity, min_stock, location')
-        .eq('sku', sku)
-        .single()
-
-      return NextResponse.json({
-        id: product.sku,
-        name: product.name,
-        description: product.description,
-        sku: product.sku,
-        price: parseFloat(product.price),
-        color: product.color,
-        leadtime: product.leadtime,
-        category: category || null,
-        inventory: inventoryData ? {
-          quantity: inventoryData.quantity || 0,
-          minStock: inventoryData.min_stock || null,
-          location: inventoryData.location || null
-        } : null
-      }, { status: 201 })
+    if (insertError) {
+      console.error('Error creating product:', insertError)
+      throw new Error(`Failed to create product: ${insertError.message || JSON.stringify(insertError)}`)
     }
-    
-    const product = productData?.[0] // RPC returns array, get first item
 
-    if (!product) {
+    if (!productData) {
       throw new Error('Product was not created successfully')
     }
 
-    // Create/update inventory record with quantity, minStock, and location
-    // Use direct Supabase upsert to handle both creation and updates
-    if (quantity !== undefined || minStock !== undefined || location !== undefined) {
-      const { error: inventoryError } = await supabaseAdmin
-        .schema('armadillo_inventory')
-        .from('inventory')
-        .upsert({
-          sku: sku,
-          name: name || null,
-          quantity: quantity !== undefined ? quantity : 0,
-          min_stock: minStock !== undefined ? minStock : null,
-          location: location || null,
-          price: price !== undefined ? price : null,
-          category: category || null,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'sku'
-        })
-      
-      if (inventoryError) {
-        console.error('Error creating inventory:', inventoryError)
-        // Don't fail the request if inventory creation fails, but log it
-      }
-    }
-
-    // Fetch created inventory to return in response
-    const { data: inventoryData } = await supabaseAdmin
-      .schema('armadillo_inventory')
-      .from('inventory')
-      .select('quantity, min_stock, location')
-      .eq('sku', sku)
-      .single()
-
-    // Return product with inventory in expected format
+    // Return product in expected format
     const response = {
-      id: product.sku, // Using SKU as ID since there's no id column
-      name: product.name,
-      description: product.description,
-      sku: product.sku,
-      price: parseFloat(product.price),
-      color: product.color,
-      leadtime: product.leadtime,
-      category: category || null,
-      inventory: inventoryData ? {
-        quantity: inventoryData.quantity || 0,
-        minStock: inventoryData.min_stock || null,
-        location: inventoryData.location || null
-      } : null
+      id: productData.sku,
+      sku: productData.sku,
+      price: parseFloat(productData.price),
+      color: productData.color || null,
+      leadtime: productData.leadtime || null,
+      quantity: productData.quantity || 0
     }
 
     return NextResponse.json(response, { status: 201 })

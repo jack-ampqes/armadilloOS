@@ -28,12 +28,6 @@ interface InventoryReportData {
     currentStock: number
     minStock: number
     recommendedOrder: number
-    category: string
-  }>
-  categoryBreakdown: Array<{
-    name: string
-    value: number
-    count: number
   }>
   lowStockItems: Array<{
     sku: string
@@ -188,13 +182,12 @@ export default function InventoryReportsPage() {
                   <TableHead className="text-white/60 text-right">Current Stock</TableHead>
                   <TableHead className="text-white/60 text-right">Min Stock</TableHead>
                   <TableHead className="text-white/60 text-right">Recommended Order</TableHead>
-                  <TableHead className="text-white/60">Category</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.reorderRecommendations.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-white/60 py-8">
+                    <TableCell colSpan={5} className="text-center text-white/60 py-8">
                       No reorder recommendations at this time
                     </TableCell>
                   </TableRow>
@@ -206,42 +199,9 @@ export default function InventoryReportsPage() {
                       <TableCell className="text-right text-white">{item.currentStock}</TableCell>
                       <TableCell className="text-right text-white/60">{item.minStock}</TableCell>
                       <TableCell className="text-right font-medium text-yellow-400">{item.recommendedOrder}</TableCell>
-                      <TableCell className="text-white/60">{item.category}</TableCell>
                     </TableRow>
                   ))
                 )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Category Breakdown */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Inventory by Category</CardTitle>
-          <CardDescription>Total value and item count by category</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-white/60">Category</TableHead>
-                  <TableHead className="text-white/60 text-right">Value</TableHead>
-                  <TableHead className="text-white/60 text-right">Items</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.categoryBreakdown.map((category, index) => (
-                  <TableRow key={index}>
-                    <TableCell className="font-medium text-white">{category.name}</TableCell>
-                    <TableCell className="text-right text-white">
-                      ${category.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </TableCell>
-                    <TableCell className="text-right text-white/60">{category.count}</TableCell>
-                  </TableRow>
-                ))}
               </TableBody>
             </Table>
           </div>

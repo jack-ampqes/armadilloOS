@@ -6,33 +6,21 @@ import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function NewProductPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
     sku: '',
     price: '',
-    category: '',
+    color: '',
+    leadtime: '',
     quantity: '',
-    minStock: '',
-    location: '',
   })
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
-  }
-
-  const handleSelectChange = (name: string, value: string) => {
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -42,8 +30,8 @@ export default function NewProductPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.name || !formData.sku || !formData.price) {
-      alert('Please fill in all required fields')
+    if (!formData.sku || !formData.price) {
+      alert('Please fill in SKU and Price (required fields)')
       return
     }
 
@@ -55,14 +43,11 @@ export default function NewProductPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: formData.name,
-          description: formData.description || null,
           sku: formData.sku,
           price: parseFloat(formData.price),
-          category: formData.category || null,
+          color: formData.color || null,
+          leadtime: formData.leadtime || null,
           quantity: formData.quantity ? parseInt(formData.quantity) : 0,
-          minStock: formData.minStock ? parseInt(formData.minStock) : 0,
-          location: formData.location || null,
         }),
       })
 
@@ -106,36 +91,6 @@ export default function NewProductPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <Label htmlFor="name">
-                  Product Name *
-                </Label>
-                <Input
-                  type="text"
-                  name="name"
-                  id="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  className="mt-1"
-                  required
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <Label htmlFor="description">
-                  Description
-                </Label>
-                <Textarea
-                  name="description"
-                  id="description"
-                  rows={3}
-                  value={formData.description}
-                  onChange={handleChange}
-                  className="mt-1"
-                  placeholder="Product description..."
-                />
-              </div>
-
               <div>
                 <Label htmlFor="sku">
                   SKU *
@@ -150,32 +105,6 @@ export default function NewProductPage() {
                   placeholder="e.g., ASP-001"
                   required
                 />
-              </div>
-
-              <div>
-                <Label htmlFor="category">
-                  Category
-                </Label>
-                <Select
-                  value={formData.category || ''}
-                  onValueChange={(value) => handleSelectChange('category', value)}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select a category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Hard Hats">Hard Hats</SelectItem>
-                    <SelectItem value="Safety Glasses">Safety Glasses</SelectItem>
-                    <SelectItem value="Gloves">Gloves</SelectItem>
-                    <SelectItem value="Ear Protection">Ear Protection</SelectItem>
-                    <SelectItem value="Respiratory Protection">Respiratory Protection</SelectItem>
-                    <SelectItem value="High Visibility">High Visibility</SelectItem>
-                    <SelectItem value="Fall Protection">Fall Protection</SelectItem>
-                    <SelectItem value="Footwear">Footwear</SelectItem>
-                    <SelectItem value="First Aid">First Aid</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               <div>
@@ -202,8 +131,38 @@ export default function NewProductPage() {
               </div>
 
               <div>
+                <Label htmlFor="color">
+                  Color
+                </Label>
+                <Input
+                  type="text"
+                  name="color"
+                  id="color"
+                  value={formData.color}
+                  onChange={handleChange}
+                  className="mt-1"
+                  placeholder="e.g., Red, Blue, Black"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="leadtime">
+                  Lead Time
+                </Label>
+                <Input
+                  type="text"
+                  name="leadtime"
+                  id="leadtime"
+                  value={formData.leadtime}
+                  onChange={handleChange}
+                  className="mt-1"
+                  placeholder="e.g., 2-3 weeks"
+                />
+              </div>
+
+              <div>
                 <Label htmlFor="quantity">
-                  Initial Stock Quantity
+                  Quantity
                 </Label>
                 <Input
                   type="number"
@@ -214,37 +173,6 @@ export default function NewProductPage() {
                   min="0"
                   className="mt-1"
                   placeholder="0"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="minStock">
-                  Minimum Stock Level
-                </Label>
-                <Input
-                  type="number"
-                  name="minStock"
-                  id="minStock"
-                  value={formData.minStock}
-                  onChange={handleChange}
-                  min="0"
-                  className="mt-1"
-                  placeholder="0"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="location">
-                  Storage Location
-                </Label>
-                <Input
-                  type="text"
-                  name="location"
-                  id="location"
-                  value={formData.location}
-                  onChange={handleChange}
-                  className="mt-1"
-                  placeholder="e.g., Warehouse A, Shelf 3"
                 />
               </div>
             </div>

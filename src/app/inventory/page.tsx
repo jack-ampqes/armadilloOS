@@ -20,7 +20,6 @@ interface Product {
   description?: string
   sku: string
   price: number
-  category?: string
   color?: string
   leadtime?: string
   inventory?: {
@@ -41,7 +40,7 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [filter, setFilter] = useState('all') // all, low-stock, out-of-stock
-  const [sortBy, setSortBy] = useState('name') // name, sku, price, stock, category
+  const [sortBy, setSortBy] = useState('sku') // name, sku, price, stock
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [page, setPage] = useState(1)
   const [stockDialogOpen, setStockDialogOpen] = useState(false)
@@ -102,7 +101,6 @@ export default function InventoryPage() {
             description: product.description,
             sku: item.sku,
             price: product.price ? parseFloat(product.price) : (item.price ? parseFloat(item.price) : 0),
-            category: product.category,
             color: product.color || item.color,
             leadtime: product.leadtime || item.leadtime,
             inventory: {
@@ -115,7 +113,9 @@ export default function InventoryPage() {
           }
         })
         setAllProducts(transformedProducts)
-        setDisplayedProducts(transformedProducts.slice(0, PRODUCTS_PER_PAGE))
+        // Sort by SKU by default
+        const sorted = getSortedProducts(transformedProducts)
+        setDisplayedProducts(sorted.slice(0, PRODUCTS_PER_PAGE))
       } else {
         const errorData = await response.json().catch(() => ({}))
         console.error('Error fetching inventory:', response.status, response.statusText, errorData)
@@ -160,9 +160,6 @@ export default function InventoryPage() {
           break
         case 'stock':
           comparison = (a.inventory?.quantity || 0) - (b.inventory?.quantity || 0)
-          break
-        case 'category':
-          comparison = (a.category || '').localeCompare(b.category || '')
           break
         default:
           comparison = 0
@@ -421,7 +418,6 @@ export default function InventoryPage() {
                   <SelectItem value="sku">SKU</SelectItem>
                   <SelectItem value="price">Price</SelectItem>
                   <SelectItem value="stock">Stock</SelectItem>
-                  <SelectItem value="category">Category</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as 'asc' | 'desc')}>
@@ -430,10 +426,10 @@ export default function InventoryPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="asc">
-                    {sortBy === 'name' || sortBy === 'sku' || sortBy === 'category' ? 'A-Z' : 'Low-High'}
+                    {sortBy === 'name' || sortBy === 'sku' ? 'A-Z' : 'Low-High'}
                   </SelectItem>
                   <SelectItem value="desc">
-                    {sortBy === 'name' || sortBy === 'sku' || sortBy === 'category' ? 'Z-A' : 'High-Low'}
+                    {sortBy === 'name' || sortBy === 'sku' ? 'Z-A' : 'High-Low'}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -459,7 +455,6 @@ export default function InventoryPage() {
                     <TableHead className="w-16 text-white/60">#</TableHead>
                     <TableHead className="w-1/4 text-white/60">Product</TableHead>
                     <TableHead className="text-white/60">SKU</TableHead>
-                    <TableHead className="hidden lg:table-cell text-white/60">Category</TableHead>
                     <TableHead className="text-white/60">Price</TableHead>
                     <TableHead className="text-white/60">Stock</TableHead>
                     <TableHead className="text-white/60">Status</TableHead>
@@ -502,11 +497,6 @@ export default function InventoryPage() {
                         </TableCell>
                         <TableCell className="text-white/60 font-mono">
                           {product.sku}
-                        </TableCell>
-                        <TableCell className="text-white/60 hidden lg:table-cell">
-                          <span className="inline-block max-w-[120px] truncate" title={product.category}>
-                            {product.category || 'N/A'}
-                          </span>
                         </TableCell>
                         <TableCell className="text-white font-medium whitespace-nowrap">
                           ${(product.price ?? 0).toFixed(2)}

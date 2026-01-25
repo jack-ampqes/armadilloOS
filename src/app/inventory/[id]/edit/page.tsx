@@ -19,7 +19,6 @@ interface Product {
   price: number
   color?: string
   leadtime?: string
-  category?: string
   inventory?: {
     quantity: number
     minStock: number
@@ -41,7 +40,6 @@ export default function EditProductPage() {
     price: '',
     color: '',
     leadtime: '',
-    category: '',
     quantity: '',
     minStock: '',
     location: '',
@@ -66,7 +64,6 @@ export default function EditProductPage() {
           price: product.price?.toString() || '',
           color: product.color || '',
           leadtime: product.leadtime || '',
-          category: product.category || '',
           quantity: product.inventory?.quantity?.toString() || '',
           minStock: product.inventory?.minStock?.toString() || '',
           location: product.inventory?.location || '',
@@ -234,32 +231,6 @@ export default function EditProductPage() {
                   disabled
                 />
                 <p className="text-xs text-white/50 mt-1">SKU cannot be changed</p>
-              </div>
-
-              <div>
-                <Label htmlFor="category">
-                  Category
-                </Label>
-                <Select
-                  value={formData.category || undefined}
-                  onValueChange={(value) => handleSelectChange('category', value)}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select a category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Hard Hats">Hard Hats</SelectItem>
-                    <SelectItem value="Safety Glasses">Safety Glasses</SelectItem>
-                    <SelectItem value="Gloves">Gloves</SelectItem>
-                    <SelectItem value="Ear Protection">Ear Protection</SelectItem>
-                    <SelectItem value="Respiratory Protection">Respiratory Protection</SelectItem>
-                    <SelectItem value="High Visibility">High Visibility</SelectItem>
-                    <SelectItem value="Fall Protection">Fall Protection</SelectItem>
-                    <SelectItem value="Footwear">Footwear</SelectItem>
-                    <SelectItem value="First Aid">First Aid</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               <div>
