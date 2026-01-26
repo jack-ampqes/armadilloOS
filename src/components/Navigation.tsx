@@ -20,7 +20,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { AlertBell } from '@/components/AlertBell'
 import { SyncedGif } from '@/components/SyncedGif'
 import { useState, useEffect, useRef } from 'react'
 
@@ -36,11 +35,16 @@ const navigation = [
   { name: 'Alerts', href: '/alerts', icon: AlertTriangle },
 ]
 
+interface Alert {
+  read: boolean
+}
+
 export default function Navigation() {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [showSignOut, setShowSignOut] = useState(false)
+  const [unreadAlertsCount, setUnreadAlertsCount] = useState(0)
   const mobileSignOutRef = useRef<HTMLDivElement>(null)
   const desktopSignOutRef = useRef<HTMLDivElement>(null)
 
@@ -81,6 +85,32 @@ export default function Navigation() {
     }
   }, [showSignOut])
 
+  useEffect(() => {
+    let aborted = false
+
+    const fetchUnreadAlertsCount = async () => {
+      try {
+        const response = await fetch('/api/alerts?resolved=false&limit=500')
+        if (!response.ok) return
+
+        const data = (await response.json()) as Alert[]
+        if (aborted) return
+
+        setUnreadAlertsCount(data.filter((a) => !a.read).length)
+      } catch (error) {
+        console.error('Error fetching alerts:', error)
+      }
+    }
+
+    fetchUnreadAlertsCount()
+    const interval = setInterval(fetchUnreadAlertsCount, 30000)
+
+    return () => {
+      aborted = true
+      clearInterval(interval)
+    }
+  }, [])
+
   return (
     <>
       {/* Mobile Header */}
@@ -92,7 +122,7 @@ export default function Navigation() {
           >
             <div className="w-8 h-8 relative">
               <SyncedGif 
-                  src="/armadilloware.gif" 
+                  src="/armaBase.gif" 
                   alt="Armadillo Logo" 
                   unoptimized
                   priority
@@ -123,7 +153,6 @@ export default function Navigation() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <AlertBell />
           <Button
             variant="ghost"
             size="icon"
@@ -145,7 +174,7 @@ export default function Navigation() {
             >
               <div className="w-58 h-30 relative flex-shrink-0">
                 <SyncedGif 
-                  src="/armadilloware.gif" 
+                  src="/armaBase.gif" 
                   alt="Armadillo Logo" 
                   unoptimized
                   priority
@@ -153,7 +182,6 @@ export default function Navigation() {
                 />
               </div>
             </button>
-            <AlertBell />
             {showSignOut && (
               <div className="absolute top-full left-6 mt-2 bg-[#181818] border border-white/20 rounded-lg shadow-lg z-50 min-w-[180px] overflow-hidden">
                 <Link
@@ -180,6 +208,7 @@ export default function Navigation() {
           <nav className="flex-1 px-5">
             {navigation.map((item, index) => {
               const isActive = pathname === item.href
+              const isAlerts = item.href === '/alerts'
               const Icon = item.icon
               return (
                 <Link key={item.name} href={item.href} className="block mb-4">
@@ -188,14 +217,20 @@ export default function Navigation() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.05 }}
                     className={cn(
-                      'relative flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200',
-                      isActive
-                        ? 'border border-white text-white'
-                        : 'text-white/70 hover:bg-white/10'
+                      'relative flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200',
+                      isActive ? 'border border-white text-white' : 'text-white/70 hover:bg-white/10',
+                      isAlerts && unreadAlertsCount > 0 ? 'bg-red-500/20' : null
                     )}
                   >
-                    <Icon className="w-5 h-5 flex-shrink-0" />
-                    <span>{item.name}</span>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      <span className="truncate">{item.name}</span>
+                    </div>
+                    {isAlerts && unreadAlertsCount > 0 && (
+                      <span className="ml-3 flex-shrink-0 text-sm font-semibold text-white tabular-nums">
+                        {unreadAlertsCount > 99 ? '99+' : unreadAlertsCount}
+                      </span>
+                    )}
                   </motion.div>
                 </Link>
               )
@@ -233,6 +268,7 @@ export default function Navigation() {
               <nav className="flex-1 px-4 space-y-2">
                 {navigation.map((item, index) => {
                   const isActive = pathname === item.href
+                  const isAlerts = item.href === '/alerts'
                   const Icon = item.icon
                   return (
                     <Link key={item.name} href={item.href} onClick={() => setMobileMenuOpen(false)}>
@@ -241,14 +277,26 @@ export default function Navigation() {
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: index * 0.05 }}
                         className={cn(
-                          'relative flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200',
-                          isActive
-                            ? 'bg-white text-black'
-                            : 'text-white/70 hover:bg-white/10'
+                          'relative flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200',
+                          isAlerts && unreadAlertsCount > 0
+                            ? cn(
+                                'bg-red-500/20 text-white',
+                                isActive ? 'border border-white/50' : null
+                              )
+                            : isActive
+                              ? 'bg-white text-black'
+                              : 'text-white/70 hover:bg-white/10'
                         )}
                       >
-                        <Icon className="w-5 h-5 flex-shrink-0" />
-                        <span>{item.name}</span>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Icon className="w-5 h-5 flex-shrink-0" />
+                          <span className="truncate">{item.name}</span>
+                        </div>
+                        {isAlerts && unreadAlertsCount > 0 && (
+                          <span className="ml-3 flex-shrink-0 text-sm font-semibold text-white tabular-nums">
+                            {unreadAlertsCount > 99 ? '99+' : unreadAlertsCount}
+                          </span>
+                        )}
                       </motion.div>
                     </Link>
                   )
