@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
 
 interface Order {
   id: string
@@ -170,7 +169,7 @@ export default function OrdersPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[60vh]">
-        <Skeleton className="h-16 w-16 rounded-full" />
+        <div className="loader"></div>
       </div>
     )
   }
