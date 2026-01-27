@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,8 +28,18 @@ interface ShopifyConnectionStatus {
   updated_at?: string | null
 }
 
+interface QuickBooksConnectionStatus {
+  connected: boolean
+  source: 'supabase' | 'env' | null
+  realmId?: string | null
+  expired?: boolean
+  connected_by_email?: string | null
+  updated_at?: string | null
+}
+
 export default function ProfilePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -42,6 +52,8 @@ export default function ProfilePage() {
   const [shopifyStatus, setShopifyStatus] = useState<ShopifyConnectionStatus | null>(null)
   const [shopDomain, setShopDomain] = useState('')
   const [shopifyError, setShopifyError] = useState('')
+  const [quickbooksStatus, setQuickbooksStatus] = useState<QuickBooksConnectionStatus | null>(null)
+  const [quickbooksError, setQuickbooksError] = useState('')
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
@@ -52,7 +64,15 @@ export default function ProfilePage() {
 
     fetchProfile()
     fetchShopifyStatus()
+    fetchQuickBooksStatus()
   }, [router])
+
+  useEffect(() => {
+    if (searchParams.get('quickbooks') === 'connected') {
+      fetchQuickBooksStatus()
+      router.replace('/profile')
+    }
+  }, [searchParams])
 
   const fetchProfile = async () => {
     try {
@@ -113,6 +133,17 @@ export default function ProfilePage() {
     }
   }
 
+  const fetchQuickBooksStatus = async () => {
+    try {
+      const res = await fetch('/api/quickbooks/connection')
+      if (!res.ok) return
+      const data = (await res.json()) as QuickBooksConnectionStatus
+      setQuickbooksStatus(data)
+    } catch {
+      // ignore
+    }
+  }
+
   const handleConnectShopify = () => {
     setShopifyError('')
     const userEmail = localStorage.getItem('user_email') || ''
@@ -127,6 +158,16 @@ export default function ProfilePage() {
     window.location.href = `/api/shopify/auth?shop=${encodeURIComponent(
       shopDomain.trim()
     )}&userEmail=${encodeURIComponent(userEmail)}`
+  }
+
+  const handleConnectQuickBooks = () => {
+    setQuickbooksError('')
+    const userEmail = localStorage.getItem('user_email') || ''
+    if (!userEmail) {
+      setQuickbooksError('Missing user email in localStorage. Please log in again.')
+      return
+    }
+    window.location.href = `/api/quickbooks/auth?userEmail=${encodeURIComponent(userEmail)}`
   }
 
   const handleSave = async () => {
@@ -371,6 +412,39 @@ export default function ProfilePage() {
                 className="bg-white text-[#181818] hover:bg-white/90"
               >
                 Connect Shopify
+              </Button>
+            </div>
+          </div>
+
+          {/* QuickBooks connection */}
+          <div className="mt-6 pt-6 border-t border-white/10 space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-white font-semibold">QuickBooks</h3>
+                <p className="text-white/60 text-sm">
+                  Connect QuickBooks Online to sync estimates and invoices.
+                </p>
+              </div>
+              <Badge variant={quickbooksStatus?.connected ? 'success' : 'secondary'}>
+                {quickbooksStatus?.connected ? 'Connected' : 'Not connected'}
+              </Badge>
+            </div>
+            {quickbooksStatus?.connected && quickbooksStatus.realmId && (
+              <p className="text-white/40 text-xs">
+                Company ID: <span className="text-white/70">{quickbooksStatus.realmId}</span>
+                {quickbooksStatus.source ? ` (via ${quickbooksStatus.source})` : ''}
+              </p>
+            )}
+            {quickbooksError && (
+              <p className="text-red-400 text-xs">{quickbooksError}</p>
+            )}
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                onClick={handleConnectQuickBooks}
+                className="bg-white text-[#181818] hover:bg-white/90"
+              >
+                Connect QuickBooks
               </Button>
             </div>
           </div>

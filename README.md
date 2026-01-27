@@ -52,6 +52,14 @@ A comprehensive management software for Armadillo Safety Products to manage orde
    # Option B (legacy/dev fallback): single-store token via env
    SHOPIFY_STORE_DOMAIN=your-store.myshopify.com
    SHOPIFY_ACCESS_TOKEN=your_shopify_admin_api_access_token
+   #
+   # QuickBooks (Optional – for estimates/invoices)
+   # Create an app at https://developer.intuit.com, then set:
+   QUICKBOOKS_CLIENT_ID=your_quickbooks_client_id
+   QUICKBOOKS_CLIENT_SECRET=your_quickbooks_client_secret
+   QUICKBOOKS_APP_URL=http://localhost:3000
+   # Add redirect URI in the Intuit app: {QUICKBOOKS_APP_URL}/api/quickbooks/callback
+   # Create the Supabase table from: supabaseTable/quickbooks_connections.sql
    ```
    
    Get your Supabase credentials from: https://app.supabase.com/project/_/settings/api
