@@ -14,7 +14,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'Missing QUICKBOOKS_CLIENT_ID',
-        message: 'Set QUICKBOOKS_CLIENT_ID in your environment.',
+        message:
+          'Set QUICKBOOKS_CLIENT_ID in .env.local (local) or in your host\'s env vars (e.g. Vercel → Settings → Environment Variables). Restart the dev server after changing .env.local.',
       },
       { status: 500 }
     )
