@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
@@ -37,7 +37,7 @@ interface QuickBooksConnectionStatus {
   updated_at?: string | null
 }
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -483,5 +483,17 @@ export default function ProfilePage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#181818] flex items-center justify-center">
+        <div className="text-white">Loading profile...</div>
+      </div>
+    }>
+      <ProfilePageContent />
+    </Suspense>
   )
 }
