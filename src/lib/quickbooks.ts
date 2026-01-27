@@ -163,3 +163,87 @@ export async function queryAccounts(
     `/query?query=${encodeURIComponent(query)}`
   )
 }
+
+/** P&L Report row structure */
+export interface ProfitAndLossRow {
+  ColData?: Array<{ value?: string; id?: string }>
+  Summary?: { ColData?: Array<{ value?: string }> }
+  Rows?: { Row?: ProfitAndLossRow[] }
+  group?: string
+  type?: string
+}
+
+/** P&L Report response */
+export interface ProfitAndLossResponse {
+  Header?: {
+    Time?: string
+    ReportName?: string
+    StartPeriod?: string
+    EndPeriod?: string
+  }
+  Columns?: { Column?: Array<{ ColTitle?: string; ColType?: string }> }
+  Rows?: {
+    Row?: ProfitAndLossRow[]
+  }
+}
+
+/** Fetch Profit & Loss report from QuickBooks */
+export async function getProfitAndLoss(
+  creds: QuickBooksApiCredentials,
+  startDate?: string,
+  endDate?: string
+): Promise<ProfitAndLossResponse> {
+  const params = new URLSearchParams()
+  if (startDate) params.set('start_date', startDate)
+  if (endDate) params.set('end_date', endDate)
+  params.set('summarize_column_by', 'Total')
+  
+  const queryString = params.toString()
+  return qbRequest<ProfitAndLossResponse>(
+    creds,
+    'GET',
+    `/reports/ProfitAndLoss${queryString ? `?${queryString}` : ''}`
+  )
+}
+
+/** Parse P&L report to extract key totals */
+export function parseProfitAndLoss(report: ProfitAndLossResponse): {
+  totalIncome: number
+  totalExpenses: number
+  netIncome: number
+  costOfGoodsSold: number
+  grossProfit: number
+} {
+  let totalIncome = 0
+  let totalExpenses = 0
+  let netIncome = 0
+  let costOfGoodsSold = 0
+  let grossProfit = 0
+
+  const rows = report.Rows?.Row || []
+  
+  for (const row of rows) {
+    const group = row.group?.toLowerCase() || ''
+    const summary = row.Summary?.ColData?.[1]?.value
+    const value = summary ? parseFloat(summary) || 0 : 0
+
+    if (group === 'income') {
+      totalIncome = value
+    } else if (group === 'cogs') {
+      costOfGoodsSold = value
+    } else if (group === 'grossprofit') {
+      grossProfit = value
+    } else if (group === 'expenses') {
+      totalExpenses = value
+    } else if (group === 'netincome' || row.type === 'Section' && row.group === 'NetIncome') {
+      netIncome = value
+    }
+  }
+
+  // If netIncome wasn't found directly, calculate it
+  if (netIncome === 0 && (totalIncome !== 0 || totalExpenses !== 0)) {
+    netIncome = totalIncome - costOfGoodsSold - totalExpenses
+  }
+
+  return { totalIncome, totalExpenses, netIncome, costOfGoodsSold, grossProfit }
+}

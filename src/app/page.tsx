@@ -50,6 +50,11 @@ interface DashboardStats {
     statusDistribution: Array<{ name: string; value: number }>
   }
   topCustomers: Array<{ name: string; revenue: number }>
+  quickbooks?: {
+    connected: boolean
+    thisMonth?: { totalIncome: number; totalExpenses: number; netIncome: number; grossProfit: number }
+    thisYear?: { totalIncome: number; totalExpenses: number; netIncome: number; grossProfit: number }
+  }
   error?: string
 }
 
@@ -303,6 +308,71 @@ export default function Dashboard() {
                       </CardContent>
                     </Card>
                   </div>
+
+                  {/* Financials */}
+                  {stats.quickbooks?.connected && (
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                        <DollarSign className="h-5 w-5" />
+                        Financials
+                      </h3>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {/* This Month */}
+                        <Card className="bg-gradient-to-br from-[#1f1f1f] to-[#252525]">
+                          <CardHeader>
+                            <CardTitle className="text-white/80 text-sm font-medium">This Month</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <div className="flex justify-between items-center">
+                              <span className="text-white/60 text-sm">Income</span>
+                              <span className="text-green-400 font-semibold">
+                                ${(stats.quickbooks.thisMonth?.totalIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-white/60 text-sm">Expenses</span>
+                              <span className="text-red-400 font-semibold">
+                                ${(stats.quickbooks.thisMonth?.totalExpenses || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div className="border-t border-white/10 pt-2 flex justify-between items-center">
+                              <span className="text-white/80 text-sm font-medium">Net Income</span>
+                              <span className={`text-lg font-bold ${(stats.quickbooks.thisMonth?.netIncome || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                ${(stats.quickbooks.thisMonth?.netIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* This Year */}
+                        <Card className="bg-gradient-to-br from-[#1f1f1f] to-[#252525]">
+                          <CardHeader>
+                            <CardTitle className="text-white/80 text-sm font-medium">This Year</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <div className="flex justify-between items-center">
+                              <span className="text-white/60 text-sm">Income</span>
+                              <span className="text-green-400 font-semibold">
+                                ${(stats.quickbooks.thisYear?.totalIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-white/60 text-sm">Expenses</span>
+                              <span className="text-red-400 font-semibold">
+                                ${(stats.quickbooks.thisYear?.totalExpenses || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div className="border-t border-white/10 pt-2 flex justify-between items-center">
+                              <span className="text-white/80 text-sm font-medium">Net Income</span>
+                              <span className={`text-lg font-bold ${(stats.quickbooks.thisYear?.netIncome || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                ${(stats.quickbooks.thisYear?.netIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Charts */}
                   {stats.charts.revenueTrend.length > 0 && (

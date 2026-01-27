@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getOrders } from '@/lib/shopify'
 import { getDefaultShopifyCredentials } from '@/lib/shopify-connection'
+import { getDefaultQuickBooksCredentials } from '@/lib/quickbooks-connection'
+import { getProfitAndLoss, parseProfitAndLoss } from '@/lib/quickbooks'
 import { PrismaClient } from '@prisma/client'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -131,6 +133,36 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5)
 
+    // QuickBooks financials (optional - only if connected)
+    let quickbooks: {
+      connected: boolean
+      thisMonth?: { totalIncome: number; totalExpenses: number; netIncome: number; grossProfit: number }
+      thisYear?: { totalIncome: number; totalExpenses: number; netIncome: number; grossProfit: number }
+    } = { connected: false }
+
+    try {
+      const qbCreds = await getDefaultQuickBooksCredentials()
+      
+      // This month P&L
+      const thisMonthStart = thisMonth.toISOString().split('T')[0]
+      const todayStr = now.toISOString().split('T')[0]
+      const plThisMonth = await getProfitAndLoss(qbCreds, thisMonthStart, todayStr)
+      const parsedMonth = parseProfitAndLoss(plThisMonth)
+      
+      // This year P&L
+      const thisYearStart = thisYear.toISOString().split('T')[0]
+      const plThisYear = await getProfitAndLoss(qbCreds, thisYearStart, todayStr)
+      const parsedYear = parseProfitAndLoss(plThisYear)
+
+      quickbooks = {
+        connected: true,
+        thisMonth: parsedMonth,
+        thisYear: parsedYear,
+      }
+    } catch {
+      // QuickBooks not connected or error - continue without it
+    }
+
     return NextResponse.json({
       revenue: {
         today: revenueToday,
@@ -155,6 +187,7 @@ export async function GET(request: NextRequest) {
         statusDistribution: statusData,
       },
       topCustomers,
+      quickbooks,
     })
   } catch (error) {
     console.error('Error fetching dashboard stats:', error)
@@ -162,7 +195,7 @@ export async function GET(request: NextRequest) {
     
     // Return partial data if Shopify is not configured
     if (errorMessage.includes('Missing Shopify credentials') || errorMessage.includes('not configured')) {
-      // Still return inventory and quotes data
+      // Still return inventory, quotes, and QuickBooks data
       const { data: inventoryData } = await supabaseAdmin
         .schema('armadillo_inventory')
         .from('inventory')
@@ -183,6 +216,37 @@ export async function GET(request: NextRequest) {
           }
         }
       })
+
+      // Try to get QuickBooks data even if Shopify fails
+      let quickbooks: {
+        connected: boolean
+        thisMonth?: { totalIncome: number; totalExpenses: number; netIncome: number; grossProfit: number }
+        thisYear?: { totalIncome: number; totalExpenses: number; netIncome: number; grossProfit: number }
+      } = { connected: false }
+
+      try {
+        const now = new Date()
+        const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+        const thisYear = new Date(now.getFullYear(), 0, 1)
+        const qbCreds = await getDefaultQuickBooksCredentials()
+        
+        const thisMonthStart = thisMonth.toISOString().split('T')[0]
+        const todayStr = now.toISOString().split('T')[0]
+        const plThisMonth = await getProfitAndLoss(qbCreds, thisMonthStart, todayStr)
+        const parsedMonth = parseProfitAndLoss(plThisMonth)
+        
+        const thisYearStart = thisYear.toISOString().split('T')[0]
+        const plThisYear = await getProfitAndLoss(qbCreds, thisYearStart, todayStr)
+        const parsedYear = parseProfitAndLoss(plThisYear)
+
+        quickbooks = {
+          connected: true,
+          thisMonth: parsedMonth,
+          thisYear: parsedYear,
+        }
+      } catch {
+        // QuickBooks not connected
+      }
 
       return NextResponse.json({
         revenue: {
@@ -208,6 +272,7 @@ export async function GET(request: NextRequest) {
           statusDistribution: [],
         },
         topCustomers: [],
+        quickbooks,
         error: 'Shopify integration not configured',
       })
     }
