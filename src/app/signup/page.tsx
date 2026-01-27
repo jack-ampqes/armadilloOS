@@ -164,6 +164,11 @@ export default function SignUpPage() {
                 Sign in
               </Link>
             </div>
+            <div className="text-center text-xs text-white/40 pt-2 border-t border-white/10">
+              <Link href="/legal/eula" className="hover:text-white/60">EULA</Link>
+              {' · '}
+              <Link href="/legal/privacy" className="hover:text-white/60">Privacy Policy</Link>
+            </div>
           </div>
         </form>
       </div>
