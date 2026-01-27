@@ -54,6 +54,11 @@ function ProfilePageContent() {
   const [shopifyError, setShopifyError] = useState('')
   const [quickbooksStatus, setQuickbooksStatus] = useState<QuickBooksConnectionStatus | null>(null)
   const [quickbooksError, setQuickbooksError] = useState('')
+  const [quickbooksVerifyLoading, setQuickbooksVerifyLoading] = useState(false)
+  const [quickbooksAccounts, setQuickbooksAccounts] = useState<
+    Array<{ id?: string; name?: string; type?: string; subType?: string }> | null
+  >(null)
+  const [quickbooksVerifyError, setQuickbooksVerifyError] = useState('')
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
@@ -168,6 +173,29 @@ function ProfilePageContent() {
       return
     }
     window.location.href = `/api/quickbooks/auth?userEmail=${encodeURIComponent(userEmail)}`
+  }
+
+  const handleVerifyQuickBooks = async () => {
+    setQuickbooksVerifyError('')
+    setQuickbooksAccounts(null)
+    setQuickbooksVerifyLoading(true)
+    try {
+      const res = await fetch('/api/quickbooks/accounts')
+      const data = (await res.json()) as {
+        ok?: boolean
+        error?: string
+        accounts?: Array<{ id?: string; name?: string; type?: string; subType?: string }>
+      }
+      if (data.ok && Array.isArray(data.accounts)) {
+        setQuickbooksAccounts(data.accounts)
+      } else {
+        setQuickbooksVerifyError(data.error ?? 'Verification failed')
+      }
+    } catch {
+      setQuickbooksVerifyError('Could not reach QuickBooks')
+    } finally {
+      setQuickbooksVerifyLoading(false)
+    }
   }
 
   const handleSave = async () => {
@@ -437,6 +465,36 @@ function ProfilePageContent() {
             )}
             {quickbooksError && (
               <p className="text-red-400 text-xs">{quickbooksError}</p>
+            )}
+            {quickbooksStatus?.connected && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleVerifyQuickBooks}
+                  disabled={quickbooksVerifyLoading}
+                  className="border-white/20 text-white hover:bg-white/10"
+                >
+                  {quickbooksVerifyLoading ? 'Verifying...' : 'Verify connection'}
+                </Button>
+                {quickbooksVerifyError && (
+                  <p className="text-red-400 text-xs">{quickbooksVerifyError}</p>
+                )}
+                {quickbooksAccounts && (
+                  <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                    <p className="text-white/80 text-sm font-medium mb-2">
+                      Connected and verified — chart of accounts (first 5):
+                    </p>
+                    <ul className="text-white/60 text-xs space-y-1">
+                      {quickbooksAccounts.map((a, i) => (
+                        <li key={a.id ?? i}>
+                          {a.name ?? '—'} {a.type ? `(${a.type})` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
             )}
             <div className="flex justify-end">
               <Button

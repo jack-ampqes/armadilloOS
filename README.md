@@ -58,6 +58,8 @@ A comprehensive management software for Armadillo Safety Products to manage orde
    QUICKBOOKS_CLIENT_ID=your_quickbooks_client_id
    QUICKBOOKS_CLIENT_SECRET=your_quickbooks_client_secret
    QUICKBOOKS_APP_URL=http://localhost:3000
+   # Set QUICKBOOKS_SANDBOX=true when using Intuit sandbox company and sandbox keys
+   QUICKBOOKS_SANDBOX=true
    # Add redirect URI in the Intuit app: {QUICKBOOKS_APP_URL}/api/quickbooks/callback
    # Create the Supabase table from: supabaseTable/quickbooks_connections.sql
    ```

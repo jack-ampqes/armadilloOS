@@ -1,6 +1,10 @@
 import type { QuickBooksApiCredentials } from './quickbooks-connection'
 
-const QB_BASE = 'https://quickbooks.api.intuit.com/v3/company'
+function getQbBase(): string {
+  return process.env.QUICKBOOKS_SANDBOX === 'true'
+    ? 'https://sandbox-quickbooks.api.intuit.com/v3/company'
+    : 'https://quickbooks.api.intuit.com/v3/company'
+}
 
 async function qbRequest<T>(
   creds: QuickBooksApiCredentials,
@@ -8,7 +12,8 @@ async function qbRequest<T>(
   path: string,
   body?: object
 ): Promise<T> {
-  const url = `${QB_BASE}/${creds.realmId}${path}`
+  const base = getQbBase()
+  const url = `${base}/${creds.realmId}${path}`
   const headers: Record<string, string> = {
     Authorization: `Bearer ${creds.accessToken}`,
     Accept: 'application/json',
@@ -134,4 +139,27 @@ export async function sendInvoice(
 ): Promise<{ Invoice: { Id: string; EmailStatus?: string } }> {
   const path = `/invoice/${invoiceId}/send${sendTo ? `?sendTo=${encodeURIComponent(sendTo)}` : ''}`
   return qbRequest(creds, 'POST', path, undefined)
+}
+
+/** QBO QueryResponse for Account. */
+export interface AccountQueryResponse {
+  QueryResponse?: {
+    Account?: Array<{ Id?: string; Name?: string; AccountType?: string; AccountSubType?: string }>
+    startPosition?: number
+    maxResults?: number
+    totalCount?: number
+  }
+}
+
+/** Query Account entity (chart of accounts). Uses getDefaultQuickBooksCredentials + refresh when expired. */
+export async function queryAccounts(
+  creds: QuickBooksApiCredentials,
+  maxResults = 5
+): Promise<AccountQueryResponse> {
+  const query = `select * from Account maxresults ${Math.min(Math.max(1, maxResults), 100)}`
+  return qbRequest<AccountQueryResponse>(
+    creds,
+    'GET',
+    `/query?query=${encodeURIComponent(query)}`
+  )
 }

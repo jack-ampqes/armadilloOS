@@ -35,6 +35,15 @@ export async function GET(request: NextRequest) {
   const origin = appUrl?.replace(/\/+$/, '') || request.nextUrl.origin.replace(/\/+$/, '')
   const redirectUri = `${origin}/api/quickbooks/callback`
 
+  // Debug: ?debug=1 returns the exact redirect_uri so you can copy it into Intuit's Redirect URIs
+  if (request.nextUrl.searchParams.get('debug') === '1') {
+    return NextResponse.json({
+      redirectUri,
+      origin,
+      hint: 'Add redirectUri exactly to Intuit Developer Portal → app → Keys & credentials → Redirect URIs',
+    })
+  }
+
   const authUrl = new URL('https://appcenter.intuit.com/connect/oauth2')
   authUrl.searchParams.set('client_id', clientId)
   authUrl.searchParams.set('redirect_uri', redirectUri)

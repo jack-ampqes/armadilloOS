@@ -105,33 +105,37 @@ export default function OrdersPage() {
         }
       } else {
         // Handle error response
-        let errorData: any = {}
+        let errorData: Record<string, unknown> = {}
         let errorText = ''
-        
+
         try {
           if (isJson) {
-            errorData = await response.json()
+            errorData = (await response.json()) as Record<string, unknown>
           } else {
             errorText = await response.text()
             errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` }
           }
         } catch (parseError) {
-          errorData = { 
+          errorData = {
             error: `HTTP ${response.status}: ${response.statusText}`,
-            details: errorText || 'Could not parse error response'
+            details: errorText || 'Could not parse error response',
           }
         }
-        
-        console.error('Error fetching orders:', {
-          status: response.status,
-          statusText: response.statusText,
-          errorData,
-          contentType
-        })
-        
-        const statusCode = errorData.statusCode || response.status
+
+        const status = response.status
+        const statusText = response.statusText
+        console.error(
+          'Error fetching orders:',
+          status,
+          statusText,
+          Object.keys(errorData).length ? errorData : `body: ${errorText || '(empty)'}`
+        )
+
         const hint = errorData.hint ? ` (${errorData.hint})` : ''
-        const errorMessage = `${errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`}${hint}`
+        const errorMessage =
+          (typeof errorData.message === 'string' ? errorData.message : null) ||
+          (typeof errorData.error === 'string' ? errorData.error : null) ||
+          `HTTP ${status}: ${statusText}${hint}`
         setError(errorMessage)
         setOrders([])
       }
