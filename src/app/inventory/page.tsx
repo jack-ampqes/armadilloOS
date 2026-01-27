@@ -48,6 +48,8 @@ export default function InventoryPage() {
   const [quantityInput, setQuantityInput] = useState('')
   const [updatingStock, setUpdatingStock] = useState(false)
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 })
+  const [hoveredProduct, setHoveredProduct] = useState<Product | null>(null)
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 })
   const PRODUCTS_PER_PAGE = 50
 
   useEffect(() => {
@@ -234,6 +236,19 @@ export default function InventoryPage() {
     setSelectedProduct(product)
     setQuantityInput('')
     setStockDialogOpen(true)
+  }
+
+  const handleProductHover = (product: Product | null, e?: React.MouseEvent) => {
+    if (product && e) {
+      setTooltipPosition({ x: e.clientX + 12, y: e.clientY + 12 })
+      setHoveredProduct(product)
+    } else {
+      setHoveredProduct(null)
+    }
+  }
+
+  const handleProductMouseMove = (e: React.MouseEvent) => {
+    setTooltipPosition({ x: e.clientX + 12, y: e.clientY + 12 })
   }
 
   const handleStockUpdate = async (operation: 'add' | 'subtract') => {
@@ -453,11 +468,11 @@ export default function InventoryPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-16 text-white/60">#</TableHead>
+                    <TableHead className="w-1/8 text-white/60">SKU</TableHead>
                     <TableHead className="w-1/4 text-white/60">Product</TableHead>
-                    <TableHead className="text-white/60">SKU</TableHead>
+                    <TableHead className="w-1/16 text-white/60">Stock</TableHead>
+                    <TableHead className="w-1/8 text-white/60">Status</TableHead>
                     <TableHead className="text-white/60">Price</TableHead>
-                    <TableHead className="text-white/60">Stock</TableHead>
-                    <TableHead className="text-white/60">Status</TableHead>
                     <TableHead className="w-12 text-white/60">
                       <span className="sr-only">Actions</span>
                     </TableHead>
@@ -483,23 +498,19 @@ export default function InventoryPage() {
                         <TableCell className="text-white/60 font-mono">
                           {lineNumber}
                         </TableCell>
-                        <TableCell>
-                          <div className="max-w-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-white truncate">{product.name}</span>
-                            </div>
-                            {product.description && (
-                              <div className="text-white/60 text-xs truncate" title={product.description}>
-                                {product.description.substring(0, 50)}...
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
                         <TableCell className="text-white/60 font-mono">
                           {product.sku}
                         </TableCell>
-                        <TableCell className="text-white font-medium whitespace-nowrap">
-                          ${(product.price ?? 0).toFixed(2)}
+                        <TableCell
+                          onMouseEnter={(e) => handleProductHover(product, e)}
+                          onMouseMove={handleProductMouseMove}
+                          onMouseLeave={() => handleProductHover(null)}
+                        >
+                          <div className="max-w-xs">
+                            <span className="font-medium text-white truncate hover:text-blue-400 transition-colors">
+                              {product.name}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell 
                           className="text-white whitespace-nowrap"
@@ -521,6 +532,9 @@ export default function InventoryPage() {
                           <Badge variant={badgeVariant}>
                             {stockStatus.status}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="text-white font-medium whitespace-nowrap">
+                          ${(product.price ?? 0).toFixed(2)}
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <Link
@@ -582,6 +596,11 @@ export default function InventoryPage() {
       {/* Stock Adjustment Popup */}
       {stockDialogOpen && (
         <>
+          {/* Backdrop to close on click outside */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setStockDialogOpen(false)}
+          />
           {/* Positioned Popup */}
           <div
             className="fixed z-50 w-80 rounded-lg border bg-[#181818] p-4 shadow-lg"
@@ -651,6 +670,53 @@ export default function InventoryPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Product Hover Tooltip */}
+      {hoveredProduct && (
+        <div
+          className="fixed z-50 pointer-events-none bg-[#1a1a1a] border border-white/20 rounded-lg p-3 shadow-xl max-w-xs"
+          style={{
+            left: `${Math.min(tooltipPosition.x, window.innerWidth - 320)}px`,
+            top: `${Math.min(tooltipPosition.y, window.innerHeight - 200)}px`,
+          }}
+        >
+          <div className="space-y-2">
+            <div>
+              <p className="font-semibold text-white text-sm">{hoveredProduct.name}</p>
+              <p className="text-white/50 font-mono text-xs">{hoveredProduct.sku}</p>
+            </div>
+            {hoveredProduct.description && (
+              <p className="text-white/60 text-xs line-clamp-2">{hoveredProduct.description}</p>
+            )}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+              <div className="text-white/50">Price:</div>
+              <div className="text-white font-medium">${(hoveredProduct.price ?? 0).toFixed(2)}</div>
+              <div className="text-white/50">Stock:</div>
+              <div className="text-white font-medium">{hoveredProduct.inventory?.quantity ?? 0}</div>
+              <div className="text-white/50">Min Stock:</div>
+              <div className="text-white font-medium">{hoveredProduct.inventory?.minStock ?? 0}</div>
+              {hoveredProduct.color && (
+                <>
+                  <div className="text-white/50">Color:</div>
+                  <div className="text-white font-medium">{hoveredProduct.color}</div>
+                </>
+              )}
+              {hoveredProduct.leadtime && (
+                <>
+                  <div className="text-white/50">Lead Time:</div>
+                  <div className="text-white font-medium">{hoveredProduct.leadtime}</div>
+                </>
+              )}
+              {hoveredProduct.inventory?.location && (
+                <>
+                  <div className="text-white/50">Location:</div>
+                  <div className="text-white font-medium">{hoveredProduct.inventory.location}</div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
