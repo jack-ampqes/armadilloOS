@@ -8,41 +8,72 @@ import { supabaseAdmin } from '@/lib/supabase'
 
 const prisma = new PrismaClient()
 
+type AnalyticsPeriod = 'thisMonth' | 'last3Months' | 'last6Months' | 'ytd' | 'lastYear' | 'allTime'
+
+function getDateRangeForPeriod(period: AnalyticsPeriod): { startDate: Date; endDate: Date; label: string } {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+  
+  switch (period) {
+    case 'thisMonth': {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+      return { startDate: start, endDate: today, label: 'This Month' }
+    }
+    case 'last3Months': {
+      const start = new Date(now.getFullYear(), now.getMonth() - 2, 1)
+      return { startDate: start, endDate: today, label: 'Last 3 Months' }
+    }
+    case 'last6Months': {
+      const start = new Date(now.getFullYear(), now.getMonth() - 5, 1)
+      return { startDate: start, endDate: today, label: 'Last 6 Months' }
+    }
+    case 'ytd': {
+      const start = new Date(now.getFullYear(), 0, 1)
+      return { startDate: start, endDate: today, label: 'Year to Date' }
+    }
+    case 'lastYear': {
+      const start = new Date(now.getFullYear() - 1, 0, 1)
+      const end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59)
+      return { startDate: start, endDate: end, label: 'Last Year' }
+    }
+    case 'allTime':
+    default: {
+      const start = new Date(2020, 0, 1) // Far enough back
+      return { startDate: start, endDate: today, label: 'All Time' }
+    }
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
+    // Get period from query params
+    const period = (request.nextUrl.searchParams.get('period') || 'thisMonth') as AnalyticsPeriod
+    const { startDate, endDate, label } = getDateRangeForPeriod(period)
+    
     // Get date ranges
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
     const thisYear = new Date(now.getFullYear(), 0, 1)
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
     const credentials = await getDefaultShopifyCredentials()
 
-    // Fetch recent orders from Shopify
+    // Fetch orders from Shopify for the selected period
     const orders = await getOrders({
       limit: 250,
       status: 'any',
-      created_at_min: thirtyDaysAgo.toISOString(),
+      created_at_min: startDate.toISOString(),
+      created_at_max: endDate.toISOString(),
     }, {
       shopDomain: credentials.shopDomain,
       accessToken: credentials.accessToken,
     })
 
-    // Calculate revenue metrics
-    const revenueToday = orders
-      .filter(o => new Date(o.created_at) >= today)
-      .reduce((sum, o) => sum + parseFloat(o.total_price), 0)
+    // Calculate revenue metrics for selected period
+    const totalRevenue = orders.reduce((sum, o) => sum + parseFloat(o.total_price), 0)
+    const totalOrders = orders.length
 
-    const revenueThisMonth = orders
-      .filter(o => new Date(o.created_at) >= thisMonth)
-      .reduce((sum, o) => sum + parseFloat(o.total_price), 0)
-
-    const revenueThisYear = orders
-      .filter(o => new Date(o.created_at) >= thisYear)
-      .reduce((sum, o) => sum + parseFloat(o.total_price), 0)
-
-    // Pending orders
+    // Pending orders (within selected period)
     const pendingOrders = orders.filter(o => 
       o.fulfillment_status === 'unfulfilled' || 
       o.fulfillment_status === null ||
@@ -50,7 +81,7 @@ export async function GET(request: NextRequest) {
     )
     const pendingOrdersValue = pendingOrders.reduce((sum, o) => sum + parseFloat(o.total_price), 0)
 
-    // Revenue trend (last 30 days)
+    // Revenue trend for selected period
     const revenueTrend: Record<string, number> = {}
     orders.forEach(order => {
       const date = new Date(order.created_at).toISOString().split('T')[0]
@@ -63,9 +94,8 @@ export async function GET(request: NextRequest) {
     const revenueTrendData = Object.entries(revenueTrend)
       .map(([date, revenue]) => ({ date, revenue }))
       .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-30)
 
-    // Top products (last 30 days)
+    // Top products for selected period
     const productSales: Record<string, { revenue: number; quantity: number }> = {}
     orders.forEach(order => {
       order.line_items.forEach((item: any) => {
@@ -164,15 +194,16 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
+      period,
+      periodLabel: label,
       revenue: {
-        today: revenueToday,
-        thisMonth: revenueThisMonth,
-        thisYear: revenueThisYear,
+        total: totalRevenue,
+        orderCount: totalOrders,
       },
       orders: {
         pending: pendingOrders.length,
         pendingValue: pendingOrdersValue,
-        total: orders.length,
+        total: totalOrders,
       },
       inventory: {
         lowStock: lowStockCount,
@@ -248,11 +279,15 @@ export async function GET(request: NextRequest) {
         // QuickBooks not connected
       }
 
+      const period = (request.nextUrl.searchParams.get('period') || 'thisMonth') as AnalyticsPeriod
+      const { label } = getDateRangeForPeriod(period)
+
       return NextResponse.json({
+        period,
+        periodLabel: label,
         revenue: {
-          today: 0,
-          thisMonth: 0,
-          thisYear: 0,
+          total: 0,
+          orderCount: 0,
         },
         orders: {
           pending: 0,

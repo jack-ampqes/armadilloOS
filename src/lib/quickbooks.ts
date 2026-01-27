@@ -1,7 +1,7 @@
 import type { QuickBooksApiCredentials } from './quickbooks-connection'
 
 function getQbBase(): string {
-  return process.env.QUICKBOOKS_SANDBOX === 'true'
+  return process.env.QUICKBOOKS_SANDBOX === 'false'
     ? 'https://sandbox-quickbooks.api.intuit.com/v3/company'
     : 'https://quickbooks.api.intuit.com/v3/company'
 }
@@ -206,6 +206,26 @@ export async function getProfitAndLoss(
   )
 }
 
+/** Flatten nested P&L rows so we don't miss sections inside Section rows */
+function flattenPlRows(rows: ProfitAndLossRow[]): ProfitAndLossRow[] {
+  const out: ProfitAndLossRow[] = []
+  for (const row of rows) {
+    out.push(row)
+    const nested = row.Rows?.Row
+    if (nested?.length) {
+      out.push(...flattenPlRows(nested))
+    }
+  }
+  return out
+}
+
+/** Get the total-column value from Summary; with summarize_column_by=Total the total is usually the last ColData */
+function summaryTotal(colData: Array<{ value?: string }> | undefined): number {
+  if (!colData?.length) return 0
+  const raw = colData[colData.length - 1]?.value ?? colData[0]?.value ?? ''
+  return parseFloat(raw) || 0
+}
+
 /** Parse P&L report to extract key totals */
 export function parseProfitAndLoss(report: ProfitAndLossResponse): {
   totalIncome: number
@@ -220,12 +240,11 @@ export function parseProfitAndLoss(report: ProfitAndLossResponse): {
   let costOfGoodsSold = 0
   let grossProfit = 0
 
-  const rows = report.Rows?.Row || []
-  
+  const rows = flattenPlRows(report.Rows?.Row ?? [])
+
   for (const row of rows) {
-    const group = row.group?.toLowerCase() || ''
-    const summary = row.Summary?.ColData?.[1]?.value
-    const value = summary ? parseFloat(summary) || 0 : 0
+    const group = (row.group ?? '').toLowerCase().replace(/\s+/g, '')
+    const value = summaryTotal(row.Summary?.ColData)
 
     if (group === 'income') {
       totalIncome = value
@@ -233,14 +252,15 @@ export function parseProfitAndLoss(report: ProfitAndLossResponse): {
       costOfGoodsSold = value
     } else if (group === 'grossprofit') {
       grossProfit = value
-    } else if (group === 'expenses') {
-      totalExpenses = value
-    } else if (group === 'netincome' || row.type === 'Section' && row.group === 'NetIncome') {
+    } else if (group === 'expense' || group === 'expenses') {
+      // QuickBooks may return expenses as negative; store as positive for "Total Expenses" display
+      totalExpenses = Math.abs(value)
+    } else if (group === 'netincome' || (row.type === 'Section' && row.group === 'NetIncome')) {
       netIncome = value
     }
   }
 
-  // If netIncome wasn't found directly, calculate it
+  // If netIncome wasn't found directly, derive it
   if (netIncome === 0 && (totalIncome !== 0 || totalExpenses !== 0)) {
     netIncome = totalIncome - costOfGoodsSold - totalExpenses
   }

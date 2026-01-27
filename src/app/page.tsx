@@ -25,12 +25,14 @@ import { RevenueChart } from '@/components/charts/RevenueChart'
 import { SalesBarChart } from '@/components/charts/SalesBarChart'
 import { StatusPieChart } from '@/components/charts/StatusPieChart'
 import { SyncedGif } from '@/components/SyncedGif'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface DashboardStats {
+  period: string
+  periodLabel: string
   revenue: {
-    today: number
-    thisMonth: number
-    thisYear: number
+    total: number
+    orderCount: number
   }
   orders: {
     pending: number
@@ -58,19 +60,43 @@ interface DashboardStats {
   error?: string
 }
 
+type FinancialPeriod = 'thisMonth' | 'last3Months' | 'last6Months' | 'ytd' | 'lastYear' | 'allTime'
+
+interface FinancialsData {
+  ok: boolean
+  period: string
+  label: string
+  startDate: string | null
+  endDate: string
+  totalIncome: number
+  costOfGoodsSold: number
+  totalExpenses: number
+  netIncome: number
+  grossProfit: number
+}
+
 export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [analyticsExpanded, setAnalyticsExpanded] = useState(false)
+  const [financialPeriod, setFinancialPeriod] = useState<FinancialPeriod>('thisMonth')
+  const [financials, setFinancials] = useState<FinancialsData | null>(null)
+  const [financialsLoading, setFinancialsLoading] = useState(false)
 
   useEffect(() => {
-    fetchStats()
-  }, [])
+    fetchStats(financialPeriod)
+  }, [financialPeriod])
 
-  const fetchStats = async () => {
+  useEffect(() => {
+    if (stats?.quickbooks?.connected) {
+      fetchFinancials(financialPeriod)
+    }
+  }, [financialPeriod, stats?.quickbooks?.connected])
+
+  const fetchStats = async (period: FinancialPeriod) => {
     setLoading(true)
     try {
-      const response = await fetch('/api/dashboard/stats')
+      const response = await fetch(`/api/dashboard/stats?period=${period}`)
       if (response.ok) {
         const data = await response.json()
         setStats(data)
@@ -79,6 +105,23 @@ export default function Dashboard() {
       console.error('Error fetching dashboard stats:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchFinancials = async (period: FinancialPeriod) => {
+    setFinancialsLoading(true)
+    try {
+      const response = await fetch(`/api/quickbooks/financials?period=${period}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.ok) {
+          setFinancials(data)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching financials:', error)
+    } finally {
+      setFinancialsLoading(false)
     }
   }
 
@@ -205,51 +248,59 @@ export default function Dashboard() {
           >
             <div className="px-5 pb-5 space-y-6">
               {loading ? (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  {[1, 2, 3, 4, 5, 6].map(i => (
-                    <Skeleton key={i} className="h-32" />
-                  ))}
+                <div className="flex justify-center items-center min-h-[40vh]">
+                  <div className="loader" />
                 </div>
               ) : stats && (
                 <>
+                  {/* Period Selector */}
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-white">
+                      Analytics: {stats.periodLabel}
+                    </h3>
+                    <Select value={financialPeriod} onValueChange={(v) => setFinancialPeriod(v as FinancialPeriod)}>
+                      <SelectTrigger className="w-[160px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="thisMonth">This Month</SelectItem>
+                        <SelectItem value="last3Months">Last 3 Months</SelectItem>
+                        <SelectItem value="last6Months">Last 6 Months</SelectItem>
+                        <SelectItem value="ytd">Year to Date</SelectItem>
+                        <SelectItem value="lastYear">Last Year</SelectItem>
+                        <SelectItem value="allTime">All Time</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   {/* Revenue Metrics */}
-                  <div className="grid gap-4 md:grid-cols-3">
+                  <div className="grid gap-4 md:grid-cols-2">
                     <Card>
                       <CardHeader>
                         <CardTitle className="text-white/60 text-sm font-normal flex items-center gap-2">
                           <DollarSign className="h-4 w-4" />
-                          Revenue Today
+                          Total Revenue
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-3xl font-bold text-white">
-                          ${stats.revenue.today.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ${stats.revenue.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
+                        <p className="text-white/50 text-sm mt-1">{stats.revenue.orderCount} orders</p>
                       </CardContent>
                     </Card>
                     <Card>
                       <CardHeader>
                         <CardTitle className="text-white/60 text-sm font-normal flex items-center gap-2">
-                          <DollarSign className="h-4 w-4" />
-                          Revenue This Month
+                          <TrendingUp className="h-4 w-4" />
+                          Average Order Value
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-3xl font-bold text-white">
-                          ${stats.revenue.thisMonth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-white/60 text-sm font-normal flex items-center gap-2">
-                          <DollarSign className="h-4 w-4" />
-                          Revenue This Year
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-3xl font-bold text-white">
-                          ${stats.revenue.thisYear.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ${stats.revenue.orderCount > 0 
+                            ? (stats.revenue.total / stats.revenue.orderCount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                            : '0.00'}
                         </p>
                       </CardContent>
                     </Card>
@@ -309,68 +360,66 @@ export default function Dashboard() {
                     </Card>
                   </div>
 
-                  {/* Financials */}
+                  {/* Financials (QuickBooks) */}
                   {stats.quickbooks?.connected && (
                     <div className="space-y-4">
                       <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                         <DollarSign className="h-5 w-5" />
-                        Financials
+                        Profit & Loss
                       </h3>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        {/* This Month */}
-                        <Card className="bg-gradient-to-br from-[#1f1f1f] to-[#252525]">
-                          <CardHeader>
-                            <CardTitle className="text-white/80 text-sm font-medium">This Month</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-3">
-                            <div className="flex justify-between items-center">
-                              <span className="text-white/60 text-sm">Income</span>
-                              <span className="text-green-400 font-semibold">
-                                ${(stats.quickbooks.thisMonth?.totalIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
+                      <Card className="bg-gradient-to-br from-[#1f1f1f] to-[#252525]">
+                        <CardHeader>
+                          <CardTitle className="text-white/80 text-sm font-medium">
+                            {financialsLoading ? 'Loading...' : stats.periodLabel}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          {financialsLoading ? (
+                            <div className="space-y-3">
+                              <Skeleton className="h-6 w-full" />
+                              <Skeleton className="h-6 w-full" />
+                              <Skeleton className="h-8 w-full" />
                             </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-white/60 text-sm">Expenses</span>
-                              <span className="text-red-400 font-semibold">
-                                ${(stats.quickbooks.thisMonth?.totalExpenses || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
+                          ) : financials ? (
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-white/60 text-sm">Income</span>
+                                <span className="text-green-400 font-semibold">
+                                  ${(financials.totalIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-white/60 text-sm">COGS</span>
+                                <span className="text-orange-400 font-semibold">
+                                  ${(financials.costOfGoodsSold || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-white/60 text-sm">Expenses</span>
+                                <span className="text-red-400 font-semibold">
+                                  ${(financials.totalExpenses || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              <div className="border-t border-white/10 pt-2 flex justify-between items-center">
+                                <span className="text-white/80 text-sm font-medium">Net Income</span>
+                                <span className={`text-lg font-bold ${(financials.netIncome || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  ${(financials.netIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              {financials.grossProfit !== 0 && (
+                                <div className="flex justify-between items-center text-sm">
+                                  <span className="text-white/50">Gross Profit</span>
+                                  <span className="text-white/70">
+                                    ${(financials.grossProfit || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                              )}
                             </div>
-                            <div className="border-t border-white/10 pt-2 flex justify-between items-center">
-                              <span className="text-white/80 text-sm font-medium">Net Income</span>
-                              <span className={`text-lg font-bold ${(stats.quickbooks.thisMonth?.netIncome || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                ${(stats.quickbooks.thisMonth?.netIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                          </CardContent>
-                        </Card>
-
-                        {/* This Year */}
-                        <Card className="bg-gradient-to-br from-[#1f1f1f] to-[#252525]">
-                          <CardHeader>
-                            <CardTitle className="text-white/80 text-sm font-medium">This Year</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-3">
-                            <div className="flex justify-between items-center">
-                              <span className="text-white/60 text-sm">Income</span>
-                              <span className="text-green-400 font-semibold">
-                                ${(stats.quickbooks.thisYear?.totalIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-white/60 text-sm">Expenses</span>
-                              <span className="text-red-400 font-semibold">
-                                ${(stats.quickbooks.thisYear?.totalExpenses || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                            <div className="border-t border-white/10 pt-2 flex justify-between items-center">
-                              <span className="text-white/80 text-sm font-medium">Net Income</span>
-                              <span className={`text-lg font-bold ${(stats.quickbooks.thisYear?.netIncome || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                ${(stats.quickbooks.thisYear?.netIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
+                          ) : (
+                            <p className="text-white/50 text-sm">Select a period to view financials</p>
+                          )}
+                        </CardContent>
+                      </Card>
                     </div>
                   )}
 
@@ -379,7 +428,7 @@ export default function Dashboard() {
                     <div className="grid gap-4 md:grid-cols-2">
                       <Card>
                         <CardHeader>
-                          <CardTitle>Revenue Trend (Last 30 Days)</CardTitle>
+                          <CardTitle>Revenue Trend</CardTitle>
                         </CardHeader>
                         <CardContent>
                           <RevenueChart data={stats.charts.revenueTrend} period="daily" />
@@ -402,7 +451,7 @@ export default function Dashboard() {
                   {stats.charts.topProducts.length > 0 && (
                     <Card>
                       <CardHeader>
-                        <CardTitle>Top Products (Last 30 Days)</CardTitle>
+                        <CardTitle>Top Products</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <SalesBarChart 
@@ -418,7 +467,7 @@ export default function Dashboard() {
                   {stats.topCustomers.length > 0 && (
                     <Card>
                       <CardHeader>
-                        <CardTitle>Top Customers (Last 30 Days)</CardTitle>
+                        <CardTitle>Top Customers</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-2">
