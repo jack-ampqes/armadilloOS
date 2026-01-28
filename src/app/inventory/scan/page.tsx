@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { usePermissions } from '@/lib/usePermissions';
 import { Skeleton } from '@/components/ui/skeleton';
 
 function InventoryScanContent() {
@@ -21,8 +22,14 @@ function InventoryScanContent() {
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const { hasPermission } = usePermissions();
 
   useEffect(() => {
+    if (!hasPermission('QrCodesBarcodes')) {
+      router.push('/inventory');
+      return;
+    }
+
     if (sku) {
       fetchProductAndInventory();
     }

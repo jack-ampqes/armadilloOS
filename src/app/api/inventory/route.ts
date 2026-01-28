@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { parseSkuToProduct } from '@/lib/sku-parser'
 import { checkLowStockAlerts } from '@/lib/alerts'
+import { requirePermission } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
+  const auth = requirePermission(request, 'InventoryViewing')
+  if ('response' in auth) {
+    return auth.response
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const sku = searchParams.get('sku')
@@ -96,6 +102,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = requirePermission(request, 'InventoryEditing')
+  if ('response' in auth) {
+    return auth.response
+  }
+
   try {
     const body = await request.json()
     const { sku, quantity } = body

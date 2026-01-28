@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password } = await request.json()
+    const { email, password, role: requestedRole } = await request.json()
 
     if (!email || !password) {
       return NextResponse.json(
@@ -64,9 +64,15 @@ export async function POST(request: NextRequest) {
 
     // Create user - always try admin client first (bypasses RLS), fallback to regular client
     // For server-side operations, admin client is preferred
-    let clientToUse = supabaseAdmin
     let insertError = null
     let user = null
+    const normalizedRole =
+      requestedRole === 'Admin' ||
+      requestedRole === 'Sales Rep' ||
+      requestedRole === 'Distributor' ||
+      requestedRole === 'Technician'
+        ? requestedRole
+        : 'Distributor'
     
     // Try with admin client first (if service role key is set)
     if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -75,6 +81,7 @@ export async function POST(request: NextRequest) {
         .insert({
           email: email.toLowerCase().trim(),
           password_hash: passwordHash,
+          role: normalizedRole,
         })
         .select('id, email, name, role')
         .single()
@@ -89,6 +96,7 @@ export async function POST(request: NextRequest) {
         .insert({
           email: email.toLowerCase().trim(),
           password_hash: passwordHash,
+          role: normalizedRole,
         })
         .select('id, email, name, role')
         .single()

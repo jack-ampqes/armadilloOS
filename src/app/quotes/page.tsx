@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { usePermissions } from '@/lib/usePermissions'
 
 interface QuoteItem {
   id: string
@@ -45,6 +46,7 @@ export default function QuotesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
+  const { hasPermission } = usePermissions()
 
   useEffect(() => {
     loadQuotes()
@@ -166,22 +168,26 @@ export default function QuotesPage() {
           </h1>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={loadQuotes}
-            disabled={loading}
-            title="Sync from QuickBooks and refresh"
-            className="group"
-          >
-            <RefreshCw className={`h-5 w-5 transition-transform duration-300 ${loading ? 'animate-spin' : 'group-hover:rotate-180'}`} />
-          </Button>
-          <Button asChild>
-            <Link href="/quotes/new" title="New Quote" className="gap-2">
-              <Plus size={18} aria-hidden="true" />
-              New Quote
-            </Link>
-          </Button>
+          {hasPermission('Quoting') && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={loadQuotes}
+              disabled={loading}
+              title="Sync from QuickBooks and refresh"
+              className="group"
+            >
+              <RefreshCw className={`h-5 w-5 transition-transform duration-300 ${loading ? 'animate-spin' : 'group-hover:rotate-180'}`} />
+            </Button>
+          )}
+          {hasPermission('Quoting') && (
+            <Button asChild>
+              <Link href="/quotes/new" title="New Quote" className="gap-2">
+                <Plus size={18} aria-hidden="true" />
+                New Quote
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 

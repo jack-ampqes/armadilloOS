@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getOrders } from '@/lib/shopify'
 import { getDefaultShopifyCredentials } from '@/lib/shopify-connection'
+import { requirePermission } from '@/lib/auth'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ number: string }> }
 ) {
+  const auth = requirePermission(request, 'OrdersViewing')
+  if ('response' in auth) {
+    return auth.response
+  }
+
   try {
     const { number } = await params
     

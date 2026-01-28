@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { requirePermission } from '@/lib/auth'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = requirePermission(request, 'ManufacturerOrders')
+  if ('response' in auth) {
+    return auth.response
+  }
+
   try {
     const { id } = await params
 
@@ -58,6 +64,11 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = requirePermission(request, 'ManufacturerOrders')
+  if ('response' in auth) {
+    return auth.response
+  }
+
   try {
     const { id } = await params
     const body = await request.json()
@@ -138,6 +149,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = requirePermission(request, 'ManufacturerOrders')
+  if ('response' in auth) {
+    return auth.response
+  }
+
   try {
     const { id } = await params
 

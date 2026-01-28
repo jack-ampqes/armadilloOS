@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { usePermissions } from '@/lib/usePermissions'
 
 interface Product {
   id: string
@@ -86,6 +87,7 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
   const [validDays, setValidDays] = useState('30')
   const [notes, setNotes] = useState('')
   const [pushToQuickBooks, setPushToQuickBooks] = useState(false)
+  const { hasPermission } = usePermissions()
   
   // Product search
   const [searchQuery, setSearchQuery] = useState('')
@@ -99,6 +101,11 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
   const [customItemQty, setCustomItemQty] = useState('1')
 
   useEffect(() => {
+    if (!hasPermission('Quoting')) {
+      router.push(`/quotes/${id}`)
+      return
+    }
+
     fetchProducts()
     fetchQuote()
   }, [id])

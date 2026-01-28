@@ -4,11 +4,17 @@ import { checkQuoteExpirationAlerts } from '@/lib/alerts'
 import { getDefaultQuickBooksCredentials } from '@/lib/quickbooks-connection'
 import { pushQuoteToQuickBooks } from '@/lib/quote-quickbooks'
 import { generateQuoteNumber } from '@/lib/quote-number'
+import { requirePermission } from '@/lib/auth'
 
 const prisma = new PrismaClient()
 
 // GET /api/quotes - Get all quotes
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = requirePermission(request, 'Quoting')
+  if ('response' in auth) {
+    return auth.response
+  }
+
   try {
     const quotes = await prisma.quote.findMany({
       include: {
@@ -31,6 +37,11 @@ export async function GET() {
 
 // POST /api/quotes - Create a new quote
 export async function POST(request: NextRequest) {
+  const auth = requirePermission(request, 'Quoting')
+  if ('response' in auth) {
+    return auth.response
+  }
+
   try {
     const body = await request.json()
     

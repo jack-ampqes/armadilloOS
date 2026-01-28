@@ -18,6 +18,7 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table'
+import { usePermissions } from '@/lib/usePermissions'
 
 interface QuoteItem {
   id: string
@@ -62,6 +63,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
   const [updating, setUpdating] = useState(false)
   const [pushingToQB, setPushingToQB] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { hasPermission } = usePermissions()
 
   useEffect(() => {
     fetchQuote()
@@ -423,24 +425,16 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
         </div>
         
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            onClick={pushToQuickBooks}
-            disabled={pushingToQB}
-            className="gap-2"
-            title={quote.quickbooksEstimateId ? 'Update this quote in QuickBooks' : 'Create estimate in QuickBooks'}
-          >
-            <CloudUpload className={`h-4 w-4 ${pushingToQB ? 'animate-pulse' : ''}`} />
-            {pushingToQB ? 'Pushing...' : quote.quickbooksEstimateId ? 'Update in QuickBooks' : 'Push to QuickBooks'}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/quotes/${id}/edit`)}
-            className="gap-2"
-          >
-            <Edit className="h-4 w-4" />
-            Edit
-          </Button>
+          {hasPermission('Quoting') && (
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/quotes/${id}/edit`)}
+              className="gap-2"
+            >
+              <Edit className="h-4 w-4" />
+              Edit
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={downloadPDF}
@@ -449,47 +443,51 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
             <Download className="h-4 w-4" />
             Download PDF
           </Button>
-          {quote.status === 'DRAFT' && (
-            <Button
-              variant="outline"
-              onClick={() => updateStatus('SENT')}
-              disabled={updating}
-              className="gap-2"
-            >
-              <Send className="h-4 w-4" />
-              Mark as Sent
-            </Button>
-          )}
-          {quote.status === 'SENT' && (
+          {hasPermission('Quoting') && (
             <>
+              {quote.status === 'DRAFT' && (
+                <Button
+                  variant="outline"
+                  onClick={() => updateStatus('SENT')}
+                  disabled={updating}
+                  className="gap-2"
+                >
+                  <Send className="h-4 w-4" />
+                  Mark as Sent
+                </Button>
+              )}
+              {quote.status === 'SENT' && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => updateStatus('ACCEPTED')}
+                    disabled={updating}
+                    className="gap-2 border-green-500/50 text-green-400 hover:bg-green-500/10"
+                  >
+                    <Check className="h-4 w-4" />
+                    Accept
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => updateStatus('REJECTED')}
+                    disabled={updating}
+                    className="gap-2 border-red-500/50 text-red-400 hover:bg-red-500/10"
+                  >
+                    <X className="h-4 w-4" />
+                    Reject
+                  </Button>
+                </>
+              )}
               <Button
                 variant="outline"
-                onClick={() => updateStatus('ACCEPTED')}
-                disabled={updating}
-                className="gap-2 border-green-500/50 text-green-400 hover:bg-green-500/10"
+                onClick={deleteQuote}
+                className="gap-2 text-red-400 hover:bg-red-500/20"
               >
-                <Check className="h-4 w-4" />
-                Accept
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => updateStatus('REJECTED')}
-                disabled={updating}
-                className="gap-2 border-red-500/50 text-red-400 hover:bg-red-500/10"
-              >
-                <X className="h-4 w-4" />
-                Reject
+                <Trash2 className="h-4 w-4" />
+                Delete
               </Button>
             </>
           )}
-          <Button
-            variant="outline"
-            onClick={deleteQuote}
-            className="gap-2 text-red-400 hover:bg-red-500/20"
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete
-          </Button>
         </div>
       </div>
 

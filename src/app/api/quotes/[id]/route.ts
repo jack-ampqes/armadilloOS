@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client'
 import { checkQuoteExpirationAlerts } from '@/lib/alerts'
 import { getDefaultQuickBooksCredentials } from '@/lib/quickbooks-connection'
 import { pushQuoteToQuickBooks } from '@/lib/quote-quickbooks'
+import { requirePermission } from '@/lib/auth'
 
 const prisma = new PrismaClient()
 
@@ -18,6 +19,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = requirePermission(request, 'Quoting')
+  if ('response' in auth) {
+    return auth.response
+  }
+
   try {
     const { id } = await params
 
@@ -59,6 +65,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = requirePermission(request, 'Quoting')
+  if ('response' in auth) {
+    return auth.response
+  }
+
   try {
     const { id } = await params
     const body = await request.json()
@@ -240,6 +251,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = requirePermission(request, 'Quoting')
+  if ('response' in auth) {
+    return auth.response
+  }
+
   try {
     const { id } = await params
     

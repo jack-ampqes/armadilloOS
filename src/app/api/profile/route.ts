@@ -1,29 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase, supabaseAdmin } from '@/lib/supabase'
+import { requireAuthWithRole } from '@/lib/auth'
 
 // Get user profile
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+    const auth = requireAuthWithRole(request)
+    if ('response' in auth) {
+      return auth.response
     }
 
-    const token = authHeader.substring(7)
-    const userEmail = request.headers.get('x-user-email') || 
-                     request.nextUrl.searchParams.get('email')
-
-    // For now, we'll use email from localStorage (passed via header)
-    // In production, you'd validate the token and get user from it
-    if (!userEmail) {
-      return NextResponse.json(
-        { error: 'User email required' },
-        { status: 400 }
-      )
-    }
+    const userEmail = auth.user.email
 
     // Query user from Supabase (use admin client to bypass RLS)
     const { data: user, error } = await supabaseAdmin
@@ -53,7 +40,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
           ...basicUser,
           name: null,
-          role: 'user',
+          role: auth.user.role,
         })
       }
       
@@ -83,24 +70,12 @@ export async function GET(request: NextRequest) {
 // Update user profile
 export async function PUT(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+    const auth = requireAuthWithRole(request)
+    if ('response' in auth) {
+      return auth.response
     }
 
-    const token = authHeader.substring(7)
-    const userEmail = request.headers.get('x-user-email') || 
-                     request.nextUrl.searchParams.get('email')
-
-    if (!userEmail) {
-      return NextResponse.json(
-        { error: 'User email required' },
-        { status: 400 }
-      )
-    }
+    const userEmail = auth.user.email
 
     const { name, email } = await request.json()
 

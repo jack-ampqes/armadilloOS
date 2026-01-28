@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import { usePermissions } from '@/lib/usePermissions'
 
 interface Product {
   id: string
@@ -48,6 +49,7 @@ interface QuickBooksCustomerResult {
 
 export default function NewQuotePage() {
   const router = useRouter()
+  const { hasPermission } = usePermissions()
   const [products, setProducts] = useState<Product[]>([])
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -90,6 +92,11 @@ export default function NewQuotePage() {
   const [customItemQty, setCustomItemQty] = useState('1')
 
   useEffect(() => {
+    if (!hasPermission('Quoting')) {
+      router.push('/quotes')
+      return
+    }
+
     fetchProducts()
   }, [])
 

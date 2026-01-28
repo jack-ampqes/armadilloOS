@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { SyncedGif } from '@/components/SyncedGif'
 import { useState, useEffect, useRef } from 'react'
+import { usePermissions } from '@/lib/usePermissions'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
@@ -47,6 +48,7 @@ export default function Navigation() {
   const [unreadAlertsCount, setUnreadAlertsCount] = useState(0)
   const mobileSignOutRef = useRef<HTMLDivElement>(null)
   const desktopSignOutRef = useRef<HTMLDivElement>(null)
+  const { hasPermission } = usePermissions()
 
   const handleSignOut = async () => {
     try {
@@ -207,6 +209,20 @@ export default function Navigation() {
           {/* Navigation */}
           <nav className="flex-1 px-5">
             {navigation.map((item, index) => {
+              // Permission-based visibility
+              if (item.href === '/orders' && !hasPermission('OrdersViewing')) {
+                return null
+              }
+              if (item.href === '/quotes' && !hasPermission('Quoting')) {
+                return null
+              }
+              if (item.href === '/inventory' && !hasPermission('InventoryViewing')) {
+                return null
+              }
+              if (item.href === '/inventory/codes' && !hasPermission('QrCodesBarcodes')) {
+                return null
+              }
+
               const isActive = pathname === item.href
               const isAlerts = item.href === '/alerts'
               const Icon = item.icon

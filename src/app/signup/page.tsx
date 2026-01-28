@@ -12,6 +12,7 @@ export default function SignUpPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [role, setRole] = useState<'Distributor' | 'Sales Rep' | 'Technician'>('Distributor')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
@@ -40,7 +41,7 @@ export default function SignUpPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, role }),
       })
 
       const data = await response.json()
@@ -97,6 +98,47 @@ export default function SignUpPage() {
         {/* Sign Up Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="bg-[#181818] border border-white/20 rounded-lg p-6 space-y-4">
+            <div className="space-y-2">
+              <Label className="text-white">
+                Role
+              </Label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRole('Distributor')}
+                  className={`rounded-md px-3 py-2 text-sm border ${
+                    role === 'Distributor'
+                      ? 'border-white bg-white text-black'
+                      : 'border-white/30 text-white/80 hover:bg-white/10'
+                  }`}
+                >
+                  Distributor
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRole('Sales Rep')}
+                  className={`rounded-md px-3 py-2 text-sm border ${
+                    role === 'Sales Rep'
+                      ? 'border-white bg-white text-black'
+                      : 'border-white/30 text-white/80 hover:bg-white/10'
+                  }`}
+                >
+                  Sales Rep
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRole('Technician')}
+                  className={`rounded-md px-3 py-2 text-sm border ${
+                    role === 'Technician'
+                      ? 'border-white bg-white text-black'
+                      : 'border-white/30 text-white/80 hover:bg-white/10'
+                  }`}
+                >
+                  Technician
+                </button>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="email" className="text-white">
                 Email

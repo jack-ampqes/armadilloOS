@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { requirePermission } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
+  const auth = requirePermission(request, 'ManufacturerOrders')
+  if ('response' in auth) {
+    return auth.response
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const manufacturerId = searchParams.get('manufacturerId')
@@ -57,6 +63,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = requirePermission(request, 'ManufacturerOrders')
+  if ('response' in auth) {
+    return auth.response
+  }
+
   try {
     const body = await request.json()
     const {

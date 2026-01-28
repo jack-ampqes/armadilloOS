@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { CirclePile, DollarSign, OctagonAlert, OctagonX } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { usePermissions } from '@/lib/usePermissions'
 
 interface Product {
   id: string
@@ -51,6 +52,7 @@ export default function InventoryPage() {
   const [hoveredProduct, setHoveredProduct] = useState<Product | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 })
   const PRODUCTS_PER_PAGE = 50
+  const { hasPermission } = usePermissions()
 
   useEffect(() => {
     fetchProducts()
@@ -311,28 +313,34 @@ export default function InventoryPage() {
           <h1 className="text-3xl font-bold text-white">Inventory</h1>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
-          <Button variant="outline" asChild>
-            <Link href="/inventory/manufacturer-orders">
-            <PackagePlus size={20} aria-hidden="true" /> Manufacturer Orders
-            </Link>
-          </Button>
+          {hasPermission('ManufacturerOrders') && (
+            <Button variant="outline" asChild>
+              <Link href="/inventory/manufacturer-orders">
+                <PackagePlus size={20} aria-hidden="true" /> Manufacturer Orders
+              </Link>
+            </Button>
+          )}
 
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={() => fetchProducts()}
-            disabled={loading}
-            title="Refresh inventory"
-            className="group"
-          >
-            <RefreshCw className={`h-5 w-5 transition-transform duration-300 ${loading ? 'animate-spin' : 'group-hover:rotate-180'}`} />
-          </Button>
+          {hasPermission('InventoryViewing') && (
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={() => fetchProducts()}
+              disabled={loading}
+              title="Refresh inventory"
+              className="group"
+            >
+              <RefreshCw className={`h-5 w-5 transition-transform duration-300 ${loading ? 'animate-spin' : 'group-hover:rotate-180'}`} />
+            </Button>
+          )}
 
-          <Button asChild size="icon">
-            <Link href="/inventory/new" title="Add Product">
-              <Plus size={20} aria-hidden="true" />
-            </Link>
-          </Button>
+          {hasPermission('InventoryEditing') && (
+            <Button asChild size="icon">
+              <Link href="/inventory/new" title="Add Product">
+                <Plus size={20} aria-hidden="true" />
+              </Link>
+            </Button>
+          )}
           
         </div>
       </div>
