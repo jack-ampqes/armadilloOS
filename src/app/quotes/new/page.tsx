@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Plus, Minus, Trash2, Package, User, Info, Percent, DollarSign, Search } from 'lucide-react'
+import { ArrowLeft, Plus, Minus, Trash2, Package, User, Info, Percent, DollarSign, Search, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -77,7 +77,6 @@ export default function NewQuotePage() {
   // Other
   const [validDays, setValidDays] = useState('30')
   const [notes, setNotes] = useState('')
-  const [pushToQuickBooks, setPushToQuickBooks] = useState(false)
   
   // Product search
   const [searchQuery, setSearchQuery] = useState('')
@@ -118,6 +117,18 @@ export default function NewQuotePage() {
       setCustomerSearchLoading(false)
     }
   }, [customerSearchQuery])
+
+  // Search as user types when dialog is open (no debounce)
+  useEffect(() => {
+    if (!showCustomerSearch) return
+    const q = customerSearchQuery.trim()
+    if (!q) {
+      setCustomerSearchResults([])
+      setCustomerSearchError(null)
+      return
+    }
+    searchQuickBooksCustomers()
+  }, [showCustomerSearch, customerSearchQuery, searchQuickBooksCustomers])
 
   const selectQuickBooksCustomer = (customer: QuickBooksCustomerResult) => {
     setCustomerName(customer.displayName)
@@ -311,7 +322,7 @@ export default function NewQuotePage() {
           discountValue: parseFloat(discountValue) || 0,
           validUntil,
           notes: notes || null,
-          pushToQuickBooks: pushToQuickBooks || undefined,
+          pushToQuickBooks: true,
         }),
       })
 
@@ -841,22 +852,6 @@ export default function NewQuotePage() {
           </CardContent>
         </Card>
 
-        {/* QuickBooks (optional) */}
-        <Card>
-          <CardContent className="pt-6">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={pushToQuickBooks}
-                onChange={(e) => setPushToQuickBooks(e.target.checked)}
-                className="rounded border-white/30 bg-white/5"
-              />
-              <span className="text-white/80 text-sm">Push to QuickBooks after creating</span>
-            </label>
-            <p className="text-white/50 text-xs mt-1 ml-6">Requires QuickBooks connected in Profile.</p>
-          </CardContent>
-        </Card>
-
         {/* Submit Buttons */}
         <div className="flex justify-end gap-3 pt-4">
           <Button
@@ -880,40 +875,26 @@ export default function NewQuotePage() {
       <Dialog open={showCustomerSearch} onOpenChange={setShowCustomerSearch}>
         <DialogContent className="sm:max-w-md bg-[#181818] border-white/20 text-white">
           <DialogHeader>
-            <DialogTitle>Look up customer from QuickBooks</DialogTitle>
-            <DialogDescription className="text-white/60">
-              Search by customer name. Select a customer to fill the form.
-            </DialogDescription>
+            <DialogTitle>Search from QuickBooks</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <Input
                 placeholder="Search by name..."
                 value={customerSearchQuery}
                 onChange={(e) => setCustomerSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), searchQuickBooksCustomers())}
-                className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+                className="bg-white/5 border-white/20 text-white placeholder:text-white/40 flex-1"
               />
-              <Button
-                type="button"
-                onClick={searchQuickBooksCustomers}
-                disabled={customerSearchLoading}
-              >
-                {customerSearchLoading ? 'Searching...' : 'Search'}
-              </Button>
+              {customerSearchLoading && (
+                <Loader2 className="h-5 w-5 shrink-0 animate-spin text-white/60" />
+              )}
             </div>
             {customerSearchError && (
               <p className="text-sm text-red-400">{customerSearchError}</p>
             )}
-            <div className="border border-white/20 rounded-lg max-h-64 overflow-y-auto">
-              {customerSearchResults.length === 0 && !customerSearchLoading && (
-                <div className="p-4 text-center text-white/50 text-sm">
-                  {customerSearchQuery.trim()
-                    ? 'No customers found. Try a different search.'
-                    : 'Enter a name and click Search.'}
-                </div>
-              )}
-              {customerSearchResults.map((customer) => (
+            {customerSearchResults.length > 0 && (
+              <div className="border border-white/20 rounded-lg max-h-64 overflow-y-auto">
+                {customerSearchResults.map((customer) => (
                 <button
                   key={customer.id}
                   type="button"
@@ -927,8 +908,9 @@ export default function NewQuotePage() {
                     </span>
                   )}
                 </button>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

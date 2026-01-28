@@ -433,14 +433,6 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
             <CloudUpload className={`h-4 w-4 ${pushingToQB ? 'animate-pulse' : ''}`} />
             {pushingToQB ? 'Pushing...' : quote.quickbooksEstimateId ? 'Update in QuickBooks' : 'Push to QuickBooks'}
           </Button>
-          {quote.quickbooksOpenUrl && (
-            <Button variant="outline" asChild className="gap-2">
-              <a href={quote.quickbooksOpenUrl} target="_blank" rel="noopener noreferrer" title="Open in QuickBooks">
-                <ExternalLink className="h-4 w-4" />
-                Open in QuickBooks
-              </a>
-            </Button>
-          )}
           <Button
             variant="outline"
             onClick={() => router.push(`/quotes/${id}/edit`)}

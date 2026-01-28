@@ -3,16 +3,9 @@ import { PrismaClient } from '@prisma/client'
 import { getDefaultQuickBooksCredentials } from '@/lib/quickbooks-connection'
 import { queryEstimates } from '@/lib/quickbooks'
 import { mapQuickBooksEstimateToQuote } from '@/lib/quote-quickbooks'
+import { generateQuoteNumber } from '@/lib/quote-number'
 
 const prisma = new PrismaClient()
-
-/** Generate a unique quote number for synced quotes when QB has no DocNumber. */
-function generateQuoteNumber(): string {
-  const prefix = 'Q'
-  const timestamp = Date.now().toString(36).toUpperCase()
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase()
-  return `${prefix}-${timestamp}-${random}`
-}
 
 /** POST /api/quotes/sync-from-quickbooks — fetch QB estimates and upsert local quotes. */
 export async function POST(request: NextRequest) {
@@ -27,7 +20,7 @@ export async function POST(request: NextRequest) {
     for (const qb of estimates) {
       try {
         const mapped = mapQuickBooksEstimateToQuote(qb)
-        const quoteNumber = mapped.quoteNumber.startsWith('QB-') ? generateQuoteNumber() : mapped.quoteNumber
+        const quoteNumber = mapped.quoteNumber.startsWith('QB-') ? await generateQuoteNumber(prisma) : mapped.quoteNumber
 
         const existing = await prisma.quote.findFirst({
           where: { quickbooksEstimateId: qb.Id },
@@ -71,7 +64,7 @@ export async function POST(request: NextRequest) {
           updated += 1
         } else {
           const conflict = await prisma.quote.findUnique({ where: { quoteNumber: mapped.quoteNumber } })
-          const finalQuoteNumber = conflict ? generateQuoteNumber() : mapped.quoteNumber
+          const finalQuoteNumber = conflict ? await generateQuoteNumber(prisma) : mapped.quoteNumber
 
           await prisma.quote.create({
             data: {

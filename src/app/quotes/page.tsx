@@ -97,12 +97,30 @@ export default function QuotesPage() {
     await fetchQuotes()
   }
 
-  const filteredQuotes = quotes.filter(quote =>
-    quote.quoteNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    quote.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    quote.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (quote.customerEmail?.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  /** Parse estimate number into (main, suffix) for sorting; bigger numbers first. */
+  const parseQuoteNumber = (s: string): { main: number; suffix: number } | null => {
+    const m = s.match(/^(\d+)(?:-(\d+))?/)
+    if (!m) return null
+    return { main: parseInt(m[1], 10), suffix: m[2] ? parseInt(m[2], 10) : 0 }
+  }
+
+  const filteredQuotes = quotes
+    .filter(quote =>
+      quote.quoteNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      quote.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      quote.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (quote.customerEmail?.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
+    .sort((a, b) => {
+      const pa = parseQuoteNumber(a.quoteNumber)
+      const pb = parseQuoteNumber(b.quoteNumber)
+      if (pa && pb) {
+        if (pa.main !== pb.main) return pb.main - pa.main
+        if (pa.suffix !== pb.suffix) return pb.suffix - pa.suffix
+      }
+      // Fallback: newest created first (createdAt is always returned from API)
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
 
   const getStatusVariant = (status: string): "default" | "secondary" | "outline" | "success" | "warning" | "destructive" => {
     switch (status) {
@@ -222,11 +240,6 @@ export default function QuotesPage() {
                         <Badge variant={getStatusVariant(quote.status)}>
                           {quote.status}
                         </Badge>
-                        {quote.quickbooksEstimateId && (
-                          <Badge variant="secondary" className="text-xs">
-                            QuickBooks
-                          </Badge>
-                        )}
                         {quote.validUntil && isExpired(quote.validUntil) && quote.status !== 'EXPIRED' && (
                           <Badge variant="destructive" className="text-xs">
                             Expired

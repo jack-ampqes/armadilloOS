@@ -3,16 +3,9 @@ import { PrismaClient } from '@prisma/client'
 import { checkQuoteExpirationAlerts } from '@/lib/alerts'
 import { getDefaultQuickBooksCredentials } from '@/lib/quickbooks-connection'
 import { pushQuoteToQuickBooks } from '@/lib/quote-quickbooks'
+import { generateQuoteNumber } from '@/lib/quote-number'
 
 const prisma = new PrismaClient()
-
-// Generate a unique quote number
-function generateQuoteNumber(): string {
-  const prefix = 'Q'
-  const timestamp = Date.now().toString(36).toUpperCase()
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase()
-  return `${prefix}-${timestamp}-${random}`
-}
 
 // GET /api/quotes - Get all quotes
 export async function GET() {
@@ -55,7 +48,6 @@ export async function POST(request: NextRequest) {
       discountValue,
       validUntil,
       notes,
-      pushToQuickBooks,
     } = body
 
     if (!customerName) {
@@ -92,8 +84,8 @@ export async function POST(request: NextRequest) {
     // Calculate total
     const total = subtotal - discountAmount
 
-    // Generate quote number
-    const quoteNumber = generateQuoteNumber()
+    // Generate quote number [YY][NNNN], e.g. 260001
+    const quoteNumber = await generateQuoteNumber(prisma)
 
     // Create the quote with items
     const quote = await prisma.quote.create({
@@ -144,8 +136,8 @@ export async function POST(request: NextRequest) {
       // Don't fail the request if alert check fails
     }
 
-    // Optionally push to QuickBooks (save quote first; on QB error return warning)
-    if (pushToQuickBooks && quote) {
+    // Always push to QuickBooks after creating (on QB error return warning, still 201)
+    if (quote) {
       try {
         const creds = await getDefaultQuickBooksCredentials()
         const { quickbooksEstimateId } = await pushQuoteToQuickBooks(quote, creds)
