@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, FileText, Trash2, Send, Check, X, Download, Edit } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, FileText, Trash2, Send, Check, X, Download, Edit, CloudUpload, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -50,6 +50,8 @@ interface Quote {
   updatedAt: string
   notes: string | null
   quoteItems: QuoteItem[]
+  quickbooksEstimateId?: string | null
+  quickbooksOpenUrl?: string
 }
 
 export default function QuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -58,6 +60,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
   const [quote, setQuote] = useState<Quote | null>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
+  const [pushingToQB, setPushingToQB] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -164,6 +167,24 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
       quote.customerCountry,
     ].filter(Boolean)
     return parts.length > 0 ? parts.join(', ') : null
+  }
+
+  const pushToQuickBooks = async () => {
+    if (!quote) return
+    setPushingToQB(true)
+    try {
+      const res = await fetch(`/api/quotes/${id}/push-to-quickbooks`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.ok) {
+        await fetchQuote()
+      } else {
+        alert(data.error || 'Could not push to QuickBooks. Connect QuickBooks in Profile.')
+      }
+    } catch {
+      alert('Failed to push to QuickBooks')
+    } finally {
+      setPushingToQB(false)
+    }
   }
 
   const downloadPDF = () => {
@@ -402,6 +423,24 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
         </div>
         
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={pushToQuickBooks}
+            disabled={pushingToQB}
+            className="gap-2"
+            title={quote.quickbooksEstimateId ? 'Update this quote in QuickBooks' : 'Create estimate in QuickBooks'}
+          >
+            <CloudUpload className={`h-4 w-4 ${pushingToQB ? 'animate-pulse' : ''}`} />
+            {pushingToQB ? 'Pushing...' : quote.quickbooksEstimateId ? 'Update in QuickBooks' : 'Push to QuickBooks'}
+          </Button>
+          {quote.quickbooksOpenUrl && (
+            <Button variant="outline" asChild className="gap-2">
+              <a href={quote.quickbooksOpenUrl} target="_blank" rel="noopener noreferrer" title="Open in QuickBooks">
+                <ExternalLink className="h-4 w-4" />
+                Open in QuickBooks
+              </a>
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={() => router.push(`/quotes/${id}/edit`)}

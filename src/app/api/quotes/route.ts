@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { checkQuoteExpirationAlerts } from '@/lib/alerts'
+import { getDefaultQuickBooksCredentials } from '@/lib/quickbooks-connection'
+import { pushQuoteToQuickBooks } from '@/lib/quote-quickbooks'
 
 const prisma = new PrismaClient()
 
@@ -53,6 +55,7 @@ export async function POST(request: NextRequest) {
       discountValue,
       validUntil,
       notes,
+      pushToQuickBooks,
     } = body
 
     if (!customerName) {
@@ -139,6 +142,27 @@ export async function POST(request: NextRequest) {
     } catch (alertError) {
       console.error('Error checking alerts after quote creation:', alertError)
       // Don't fail the request if alert check fails
+    }
+
+    // Optionally push to QuickBooks (save quote first; on QB error return warning)
+    if (pushToQuickBooks && quote) {
+      try {
+        const creds = await getDefaultQuickBooksCredentials()
+        const { quickbooksEstimateId } = await pushQuoteToQuickBooks(quote, creds)
+        const now = new Date()
+        const updated = await prisma.quote.update({
+          where: { id: quote.id },
+          data: { quickbooksEstimateId, quickbooksSyncedAt: now },
+          include: { quoteItems: true },
+        })
+        return NextResponse.json(updated, { status: 201 })
+      } catch (qbError) {
+        console.error('QuickBooks push after quote create:', qbError)
+        return NextResponse.json(
+          { ...quote, warning: (qbError instanceof Error ? qbError.message : 'Could not push to QuickBooks') },
+          { status: 201 }
+        )
+      }
     }
 
     return NextResponse.json(quote, { status: 201 })

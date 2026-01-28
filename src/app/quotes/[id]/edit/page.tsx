@@ -85,6 +85,7 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
   // Other
   const [validDays, setValidDays] = useState('30')
   const [notes, setNotes] = useState('')
+  const [pushToQuickBooks, setPushToQuickBooks] = useState(false)
   
   // Product search
   const [searchQuery, setSearchQuery] = useState('')
@@ -328,13 +329,17 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
           discountValue: parseFloat(discountValue) || 0,
           validUntil,
           notes: notes || null,
+          pushToQuickBooks: pushToQuickBooks || undefined,
         }),
       })
 
       const data = await response.json()
 
       if (response.ok) {
-        alert(`Quote ${data.quoteNumber} updated successfully!`)
+        const msg = data.warning
+          ? `Quote updated. ${data.warning}`
+          : `Quote ${data.quoteNumber} updated successfully!`
+        alert(msg)
         router.push(`/quotes/${id}`)
       } else {
         alert(`Error updating quote: ${data.error || data.message}`)
@@ -854,6 +859,22 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
                 />
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* QuickBooks (optional) */}
+        <Card>
+          <CardContent className="pt-6">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={pushToQuickBooks}
+                onChange={(e) => setPushToQuickBooks(e.target.checked)}
+                className="rounded border-white/30 bg-white/5"
+              />
+              <span className="text-white/80 text-sm">Push to QuickBooks when saving</span>
+            </label>
+            <p className="text-white/50 text-xs mt-1 ml-6">Requires QuickBooks connected in Profile.</p>
           </CardContent>
         </Card>
 

@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { checkQuoteExpirationAlerts } from '@/lib/alerts'
+import { getDefaultQuickBooksCredentials } from '@/lib/quickbooks-connection'
+import { pushQuoteToQuickBooks } from '@/lib/quote-quickbooks'
 
 const prisma = new PrismaClient()
+
+// Build QBO estimate URL when we have realmId and estimateId (for "Open in QuickBooks")
+function buildQuickBooksEstimateOpenUrl(realmId: string, estimateId: string): string {
+  const useSandbox = process.env.QUICKBOOKS_SANDBOX === 'true'
+  const base = useSandbox ? 'https://sandbox.qbo.intuit.com' : 'https://qbo.intuit.com'
+  return `${base}/app/estimate?companyId=${realmId}&id=${encodeURIComponent(estimateId)}`
+}
 
 // GET /api/quotes/[id] - Get a single quote
 export async function GET(
@@ -11,7 +20,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    
+
     const quote = await prisma.quote.findUnique({
       where: { id },
       include: {
@@ -26,7 +35,16 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(quote)
+    const json = { ...quote, quickbooksOpenUrl: undefined as string | undefined }
+    if (quote.quickbooksEstimateId) {
+      try {
+        const creds = await getDefaultQuickBooksCredentials()
+        json.quickbooksOpenUrl = buildQuickBooksEstimateOpenUrl(creds.realmId, quote.quickbooksEstimateId)
+      } catch {
+        // omit URL if QB not connected
+      }
+    }
+    return NextResponse.json(json)
   } catch (error) {
     console.error('Error fetching quote:', error)
     return NextResponse.json(
@@ -60,6 +78,7 @@ export async function PATCH(
       discountValue,
       validUntil,
       notes,
+      pushToQuickBooks,
       ...otherUpdates 
     } = body
 
@@ -170,7 +189,7 @@ export async function PATCH(
       }
     }
 
-    const quote = await prisma.quote.update({
+    let quote = await prisma.quote.update({
       where: { id },
       data: updateData,
       include: {
@@ -184,6 +203,26 @@ export async function PATCH(
     } catch (alertError) {
       console.error('Error checking alerts after quote update:', alertError)
       // Don't fail the request if alert check fails
+    }
+
+    // Optionally push to QuickBooks (on QB error return updated quote with warning)
+    if (pushToQuickBooks && quote) {
+      try {
+        const creds = await getDefaultQuickBooksCredentials()
+        const { quickbooksEstimateId } = await pushQuoteToQuickBooks(quote, creds)
+        const now = new Date()
+        quote = await prisma.quote.update({
+          where: { id },
+          data: { quickbooksEstimateId, quickbooksSyncedAt: now },
+          include: { quoteItems: true },
+        })
+      } catch (qbError) {
+        console.error('QuickBooks push after quote update:', qbError)
+        return NextResponse.json({
+          ...quote,
+          warning: (qbError instanceof Error ? qbError.message : 'Could not push to QuickBooks'),
+        })
+      }
     }
 
     return NextResponse.json(quote)

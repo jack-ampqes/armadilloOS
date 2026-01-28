@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Montserrat, Michroma } from "next/font/google";
+import { Geist, Geist_Mono, Montserrat, Michroma, Orbit } from "next/font/google";
 import "./globals.css";
 import ConditionalNavigation from "@/components/ConditionalNavigation";
 import ConditionalMain from "@/components/ConditionalMain";
@@ -26,6 +26,12 @@ const michroma = Michroma({
   weight: "400",
 });
 
+const orbit = Orbit({
+  variable: "--font-orbit",
+  subsets: ["latin"],
+  weight: "400",
+});
+
 export const metadata: Metadata = {
   title: "Armadillo Safety Products - Management System",
   description: "Comprehensive management software for Armadillo Safety Products",
@@ -39,7 +45,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${michroma.variable} ${montserrat.variable} antialiased bg-[#181818] text-white`}
+        className={`${geistSans.variable} ${geistMono.variable} ${michroma.variable} ${montserrat.variable} ${orbit.variable} antialiased bg-[#181818] text-white`}
       >
         <ConditionalNavigation />
         <ConditionalMain>

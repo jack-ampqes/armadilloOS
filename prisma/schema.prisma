@@ -158,6 +158,10 @@ model Quote {
   // Optional notes
   notes         String?
   
+  // QuickBooks sync
+  quickbooksEstimateId String?
+  quickbooksSyncedAt   DateTime?
+  
   // Relations
   quoteItems    QuoteItem[]
 

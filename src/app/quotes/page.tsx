@@ -2,13 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
 
 interface QuoteItem {
   id: string
@@ -37,6 +36,7 @@ interface Quote {
   createdAt: string
   notes: string | null
   quoteItems: QuoteItem[]
+  quickbooksEstimateId?: string | null
 }
 
 export default function QuotesPage() {
@@ -44,10 +44,18 @@ export default function QuotesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [syncMessage, setSyncMessage] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchQuotes()
+    loadQuotes()
   }, [])
+
+  // Auto-dismiss sync toast after 4 seconds
+  useEffect(() => {
+    if (!syncMessage) return
+    const t = setTimeout(() => setSyncMessage(null), 4000)
+    return () => clearTimeout(t)
+  }, [syncMessage])
 
   const fetchQuotes = async () => {
     setLoading(true)
@@ -70,6 +78,23 @@ export default function QuotesPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  /** Sync from QuickBooks then fetch quotes. Used on page load and when user clicks Sync. */
+  const loadQuotes = async () => {
+    setLoading(true)
+    setError(null)
+    setSyncMessage(null)
+    try {
+      const res = await fetch('/api/quotes/sync-from-quickbooks', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.ok && (data.created > 0 || data.updated > 0)) {
+        setSyncMessage(`Synced: ${data.created ?? 0} created, ${data.updated ?? 0} updated.`)
+      }
+    } catch {
+      // QB may not be connected; continue to show local quotes
+    }
+    await fetchQuotes()
   }
 
   const filteredQuotes = quotes.filter(quote =>
@@ -107,12 +132,13 @@ export default function QuotesPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[60vh]">
-        <Skeleton className="h-16 w-16 rounded-full" />
+        <div className="loader" />
       </div>
     )
   }
 
   return (
+    <>
     <div className="space-y-8 max-w-7xl">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -122,24 +148,22 @@ export default function QuotesPage() {
           </h1>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
-
-        <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="icon"
-            onClick={() => fetchQuotes()}
+            onClick={loadQuotes}
             disabled={loading}
-            title="Refresh quotes"
+            title="Sync from QuickBooks and refresh"
             className="group"
           >
             <RefreshCw className={`h-5 w-5 transition-transform duration-300 ${loading ? 'animate-spin' : 'group-hover:rotate-180'}`} />
           </Button>
-
-          <Button asChild size="icon">
-            <Link href="/inventory/new" title="Add Product">
-              <Plus size={20} aria-hidden="true" />
+          <Button asChild>
+            <Link href="/quotes/new" title="New Quote" className="gap-2">
+              <Plus size={18} aria-hidden="true" />
+              New Quote
             </Link>
           </Button>
-
         </div>
       </div>
 
@@ -191,13 +215,18 @@ export default function QuotesPage() {
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                     {/* Quote Info */}
                     <div className="flex-1 space-y-3">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 flex-wrap">
                         <h3 className="text-xl font-bold text-white">
                           {quote.quoteNumber}
                         </h3>
                         <Badge variant={getStatusVariant(quote.status)}>
                           {quote.status}
                         </Badge>
+                        {quote.quickbooksEstimateId && (
+                          <Badge variant="secondary" className="text-xs">
+                            QuickBooks
+                          </Badge>
+                        )}
                         {quote.validUntil && isExpired(quote.validUntil) && quote.status !== 'EXPIRED' && (
                           <Badge variant="destructive" className="text-xs">
                             Expired
@@ -276,5 +305,27 @@ export default function QuotesPage() {
         </motion.div>
       )}
     </div>
+
+    {/* Sync toast — bottom-right, auto-dismiss */}
+    <AnimatePresence>
+      {syncMessage && (
+        <motion.div
+          initial={{ opacity: 0, x: 24 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 24 }}
+          transition={{ type: 'tween', duration: 0.2 }}
+          className="fixed bottom-6 right-6 z-50 max-w-sm rounded-lg border px-4 py-3 shadow-lg"
+          style={{
+            backgroundColor: 'hsl(var(--background))',
+            borderColor: syncMessage.startsWith('Synced') ? 'rgba(74, 222, 128, 0.5)' : 'rgba(251, 191, 36, 0.5)',
+          }}
+        >
+          <p className={syncMessage.startsWith('Synced') ? 'text-green-400 text-sm font-medium' : 'text-amber-400 text-sm font-medium'}>
+            {syncMessage}
+          </p>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    </>
   )
 }

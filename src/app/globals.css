@@ -32,6 +32,7 @@
   --font-mono: var(--font-geist-mono);
   --font-michroma: var(--font-michroma);
   --font-montserrat: var(--font-montserrat);
+  --font-orbit: var(--font-orbit);
 }
 
 body {
@@ -42,6 +43,11 @@ body {
   font-optical-sizing: auto;
   font-weight: 300;
   font-style: normal;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-orbit), sans-serif;
+  font-size: 1.5rem;
 }
 
 a, button, [role="button"], input, select, textarea {

@@ -1,13 +1,20 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Plus, Minus, Trash2, Package, User, Info, Percent, DollarSign } from 'lucide-react'
+import { ArrowLeft, Plus, Minus, Trash2, Package, User, Info, Percent, DollarSign, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 
 interface Product {
   id: string
@@ -23,6 +30,20 @@ interface QuoteItem {
   sku: string
   quantity: number
   unitPrice: number
+}
+
+interface QuickBooksCustomerResult {
+  id: string
+  displayName: string
+  email: string
+  phone: string
+  billAddr?: {
+    line1: string
+    city: string
+    state: string
+    postalCode: string
+    country: string
+  }
 }
 
 export default function NewQuotePage() {
@@ -41,6 +62,13 @@ export default function NewQuotePage() {
   const [customerState, setCustomerState] = useState('')
   const [customerZip, setCustomerZip] = useState('')
   const [customerCountry, setCustomerCountry] = useState('US')
+
+  // QuickBooks customer search popup
+  const [showCustomerSearch, setShowCustomerSearch] = useState(false)
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('')
+  const [customerSearchResults, setCustomerSearchResults] = useState<QuickBooksCustomerResult[]>([])
+  const [customerSearchLoading, setCustomerSearchLoading] = useState(false)
+  const [customerSearchError, setCustomerSearchError] = useState<string | null>(null)
   
   // Discount
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed' | null>(null)
@@ -49,6 +77,7 @@ export default function NewQuotePage() {
   // Other
   const [validDays, setValidDays] = useState('30')
   const [notes, setNotes] = useState('')
+  const [pushToQuickBooks, setPushToQuickBooks] = useState(false)
   
   // Product search
   const [searchQuery, setSearchQuery] = useState('')
@@ -64,6 +93,48 @@ export default function NewQuotePage() {
   useEffect(() => {
     fetchProducts()
   }, [])
+
+  const searchQuickBooksCustomers = useCallback(async () => {
+    const q = customerSearchQuery.trim()
+    if (!q) {
+      setCustomerSearchResults([])
+      return
+    }
+    setCustomerSearchLoading(true)
+    setCustomerSearchError(null)
+    try {
+      const res = await fetch(`/api/quickbooks/customers?q=${encodeURIComponent(q)}`)
+      const data = await res.json()
+      if (!res.ok) {
+        setCustomerSearchError(data.error ?? 'Search failed')
+        setCustomerSearchResults([])
+        return
+      }
+      setCustomerSearchResults(data.customers ?? [])
+    } catch {
+      setCustomerSearchError('Failed to search QuickBooks')
+      setCustomerSearchResults([])
+    } finally {
+      setCustomerSearchLoading(false)
+    }
+  }, [customerSearchQuery])
+
+  const selectQuickBooksCustomer = (customer: QuickBooksCustomerResult) => {
+    setCustomerName(customer.displayName)
+    setCustomerEmail(customer.email)
+    setCustomerPhone(customer.phone)
+    if (customer.billAddr) {
+      setCustomerAddress(customer.billAddr.line1)
+      setCustomerCity(customer.billAddr.city)
+      setCustomerState(customer.billAddr.state)
+      setCustomerZip(customer.billAddr.postalCode)
+      setCustomerCountry(customer.billAddr.country || 'US')
+    }
+    setShowCustomerSearch(false)
+    setCustomerSearchQuery('')
+    setCustomerSearchResults([])
+    setCustomerSearchError(null)
+  }
 
   const fetchProducts = async () => {
     setLoadingProducts(true)
@@ -240,13 +311,17 @@ export default function NewQuotePage() {
           discountValue: parseFloat(discountValue) || 0,
           validUntil,
           notes: notes || null,
+          pushToQuickBooks: pushToQuickBooks || undefined,
         }),
       })
 
       const data = await response.json()
 
       if (response.ok) {
-        alert(`Quote ${data.quoteNumber} created successfully!`)
+        const msg = data.warning
+          ? `Quote ${data.quoteNumber} created. ${data.warning}`
+          : `Quote ${data.quoteNumber} created successfully!`
+        alert(msg)
         router.push('/quotes')
       } else {
         alert(`Error creating quote: ${data.error || data.message}`)
@@ -271,8 +346,7 @@ export default function NewQuotePage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Quotes
         </Button>
-        <h1 className="text-2xl font-bold text-white">Create New Quote</h1>
-        <p className="text-white/60 mt-1">Generate a quote for a customer</p>
+        <h1 className="text-2xl font-bold text-white">New Quote</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -283,12 +357,27 @@ export default function NewQuotePage() {
               <User className="h-5 w-5" />
               Customer Information
             </CardTitle>
-            <CardDescription>Who is this quote for?</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <Label htmlFor="customerName">Customer Name *</Label>
+              <div className="sm:col-span-2 flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="customerName">Customer Name *</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCustomerSearchQuery(customerName)
+                      setShowCustomerSearch(true)
+                      setCustomerSearchResults([])
+                      setCustomerSearchError(null)
+                    }}
+                    className="shrink-0 border-0 w-9 h-9 p-0 flex items-center justify-center"
+                  >
+                    <Search className="h-4 w-4" />
+                  </Button>
+                </div>
                 <Input
                   id="customerName"
                   value={customerName}
@@ -385,7 +474,6 @@ export default function NewQuotePage() {
               <Package className="h-5 w-5" />
               Quote Items
             </CardTitle>
-            <CardDescription>Add products or custom line items</CardDescription>
           </CardHeader>
           <CardContent>
             {/* Product Search */}
@@ -640,7 +728,6 @@ export default function NewQuotePage() {
               <Percent className="h-5 w-5" />
               Discount
             </CardTitle>
-            <CardDescription>Apply a discount to this quote (optional)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-4 items-end">
@@ -754,6 +841,22 @@ export default function NewQuotePage() {
           </CardContent>
         </Card>
 
+        {/* QuickBooks (optional) */}
+        <Card>
+          <CardContent className="pt-6">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={pushToQuickBooks}
+                onChange={(e) => setPushToQuickBooks(e.target.checked)}
+                className="rounded border-white/30 bg-white/5"
+              />
+              <span className="text-white/80 text-sm">Push to QuickBooks after creating</span>
+            </label>
+            <p className="text-white/50 text-xs mt-1 ml-6">Requires QuickBooks connected in Profile.</p>
+          </CardContent>
+        </Card>
+
         {/* Submit Buttons */}
         <div className="flex justify-end gap-3 pt-4">
           <Button
@@ -772,6 +875,63 @@ export default function NewQuotePage() {
           </Button>
         </div>
       </form>
+
+      {/* QuickBooks customer search popup */}
+      <Dialog open={showCustomerSearch} onOpenChange={setShowCustomerSearch}>
+        <DialogContent className="sm:max-w-md bg-[#181818] border-white/20 text-white">
+          <DialogHeader>
+            <DialogTitle>Look up customer from QuickBooks</DialogTitle>
+            <DialogDescription className="text-white/60">
+              Search by customer name. Select a customer to fill the form.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Search by name..."
+                value={customerSearchQuery}
+                onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), searchQuickBooksCustomers())}
+                className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+              />
+              <Button
+                type="button"
+                onClick={searchQuickBooksCustomers}
+                disabled={customerSearchLoading}
+              >
+                {customerSearchLoading ? 'Searching...' : 'Search'}
+              </Button>
+            </div>
+            {customerSearchError && (
+              <p className="text-sm text-red-400">{customerSearchError}</p>
+            )}
+            <div className="border border-white/20 rounded-lg max-h-64 overflow-y-auto">
+              {customerSearchResults.length === 0 && !customerSearchLoading && (
+                <div className="p-4 text-center text-white/50 text-sm">
+                  {customerSearchQuery.trim()
+                    ? 'No customers found. Try a different search.'
+                    : 'Enter a name and click Search.'}
+                </div>
+              )}
+              {customerSearchResults.map((customer) => (
+                <button
+                  key={customer.id}
+                  type="button"
+                  onClick={() => selectQuickBooksCustomer(customer)}
+                  className="w-full px-4 py-3 text-left hover:bg-white/10 flex flex-col gap-0.5 border-b border-white/10 last:border-0"
+                >
+                  <span className="font-medium text-white">{customer.displayName}</span>
+                  {(customer.email || customer.phone) && (
+                    <span className="text-sm text-white/60">
+                      {[customer.email, customer.phone].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
