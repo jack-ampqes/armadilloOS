@@ -39,10 +39,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(alerts)
   } catch (error) {
     console.error('Error fetching alerts:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch alerts' },
-      { status: 500 }
-    )
+    // Return empty array so nav/layout don't break when DB is unavailable (e.g. production without DATABASE_URL)
+    return NextResponse.json([])
   }
 }
 

@@ -28,9 +28,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(quotes)
   } catch (error) {
     console.error('Error fetching quotes:', error)
+    const message = error instanceof Error ? error.message : 'Failed to fetch quotes'
+    const isDbError = /prisma|database|connection|sqlite|ENOENT|connect/i.test(message)
     return NextResponse.json(
-      { error: 'Failed to fetch quotes' },
-      { status: 500 }
+      {
+        error: isDbError
+          ? 'Database unavailable. Set DATABASE_URL in Vercel for production (e.g. a hosted Postgres or SQLite URL).'
+          : 'Failed to fetch quotes',
+      },
+      { status: isDbError ? 503 : 500 }
     )
   }
 }
