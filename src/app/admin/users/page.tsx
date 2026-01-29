@@ -45,14 +45,14 @@ function permissionsSummary(role: Role): string {
 }
 
 export default function AdminUsersPage() {
-  const { hasPermission, role } = usePermissions()
+  const { role } = usePermissions()
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  const isAdmin = hasPermission('FullAccess') || role === 'Admin'
+  const isAdmin = role === 'Admin'
 
   useEffect(() => {
     if (!isAdmin) return

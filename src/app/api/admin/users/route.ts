@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requirePermission } from '@/lib/auth'
+import { requireAdmin } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
 
 /** GET /api/admin/users — list all users (Admin only). */
 export async function GET(request: NextRequest) {
-  const auth = requirePermission(request, 'FullAccess')
+  const auth = requireAdmin(request)
   if ('response' in auth) {
     return auth.response
   }

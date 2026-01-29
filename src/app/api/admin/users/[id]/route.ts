@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requirePermission } from '@/lib/auth'
+import { requireAdmin } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import type { Role } from '@/lib/permissions'
 
@@ -10,7 +10,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = requirePermission(request, 'FullAccess')
+  const auth = requireAdmin(request)
   if ('response' in auth) {
     return auth.response
   }

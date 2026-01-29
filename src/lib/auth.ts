@@ -73,3 +73,15 @@ export function requirePermission(
   return { user }
 }
 
+/** Require Admin role. Use for admin-only routes (e.g. user management). */
+export function requireAdmin(req: NextRequest): AuthResult {
+  const auth = requireAuthWithRole(req)
+  if ('response' in auth) {
+    return auth
+  }
+  if (auth.user.role !== 'Admin') {
+    return { response: forbidden('Admin only') }
+  }
+  return { user: auth.user }
+}
+

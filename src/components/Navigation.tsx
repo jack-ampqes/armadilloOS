@@ -50,7 +50,7 @@ export default function Navigation() {
   const [unreadAlertsCount, setUnreadAlertsCount] = useState(0)
   const mobileSignOutRef = useRef<HTMLDivElement>(null)
   const desktopSignOutRef = useRef<HTMLDivElement>(null)
-  const { hasPermission } = usePermissions()
+  const { hasPermission, role } = usePermissions()
 
   const handleSignOut = async () => {
     try {
@@ -224,7 +224,7 @@ export default function Navigation() {
               if (item.href === '/inventory/codes' && !hasPermission('QrCodesBarcodes')) {
                 return null
               }
-              if (item.href === '/admin/users' && !hasPermission('FullAccess')) {
+              if (item.href === '/admin/users' && role !== 'Admin') {
                 return null
               }
 
@@ -292,7 +292,7 @@ export default function Navigation() {
                   if (item.href === '/quotes' && !hasPermission('Quoting')) return null
                   if (item.href === '/inventory' && !hasPermission('InventoryViewing')) return null
                   if (item.href === '/inventory/codes' && !hasPermission('QrCodesBarcodes')) return null
-                  if (item.href === '/admin/users' && !hasPermission('FullAccess')) return null
+                  if (item.href === '/admin/users' && role !== 'Admin') return null
                   const isActive = pathname === item.href
                   const isAlerts = item.href === '/alerts'
                   const Icon = item.icon
