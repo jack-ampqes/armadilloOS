@@ -46,7 +46,8 @@ export default function QuotesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
-  const { hasPermission } = usePermissions()
+  const { hasPermission, role } = usePermissions()
+  const canQuote = hasPermission('Quoting') || role === null
 
   useEffect(() => {
     loadQuotes()
@@ -168,7 +169,7 @@ export default function QuotesPage() {
           </h1>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
-          {hasPermission('Quoting') && (
+          {canQuote && (
             <Button
               variant="outline"
               size="icon"
@@ -180,7 +181,7 @@ export default function QuotesPage() {
               <RefreshCw className={`h-5 w-5 transition-transform duration-300 ${loading ? 'animate-spin' : 'group-hover:rotate-180'}`} />
             </Button>
           )}
-          {hasPermission('Quoting') && (
+          {canQuote && (
             <Button asChild>
               <Link href="/quotes/new" title="New Quote" className="gap-2">
                 <Plus size={18} aria-hidden="true" />

@@ -87,7 +87,7 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
   const [validDays, setValidDays] = useState('30')
   const [notes, setNotes] = useState('')
   const [pushToQuickBooks, setPushToQuickBooks] = useState(false)
-  const { hasPermission } = usePermissions()
+  const { hasPermission, role } = usePermissions()
   
   // Product search
   const [searchQuery, setSearchQuery] = useState('')
@@ -101,14 +101,14 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
   const [customItemQty, setCustomItemQty] = useState('1')
 
   useEffect(() => {
-    if (!hasPermission('Quoting')) {
+    // Only redirect once we know the role; while role is null (cookie not read yet) stay on page
+    if (role !== null && !hasPermission('Quoting')) {
       router.push(`/quotes/${id}`)
       return
     }
-
     fetchProducts()
     fetchQuote()
-  }, [id])
+  }, [id, role, hasPermission])
 
   const fetchQuote = async () => {
     setLoadingQuote(true)

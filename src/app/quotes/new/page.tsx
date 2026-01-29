@@ -49,7 +49,7 @@ interface QuickBooksCustomerResult {
 
 export default function NewQuotePage() {
   const router = useRouter()
-  const { hasPermission } = usePermissions()
+  const { hasPermission, role } = usePermissions()
   const [products, setProducts] = useState<Product[]>([])
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -92,13 +92,13 @@ export default function NewQuotePage() {
   const [customItemQty, setCustomItemQty] = useState('1')
 
   useEffect(() => {
-    if (!hasPermission('Quoting')) {
+    // Only redirect once we know the role; while role is null (cookie not read yet) stay on page
+    if (role !== null && !hasPermission('Quoting')) {
       router.push('/quotes')
       return
     }
-
     fetchProducts()
-  }, [])
+  }, [role, hasPermission])
 
   const searchQuickBooksCustomers = useCallback(async () => {
     const q = customerSearchQuery.trim()

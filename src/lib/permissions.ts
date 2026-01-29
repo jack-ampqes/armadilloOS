@@ -133,7 +133,9 @@ export function getRoleFromUserInfoCookie(): Role | null {
   if (!userInfoCookie) return null
 
   try {
-    const [, rawValue] = userInfoCookie.split('=')
+    // Value may contain '=' (e.g. encoded), so take everything after first '='
+    const eqIndex = userInfoCookie.indexOf('=')
+    const rawValue = userInfoCookie.slice(eqIndex + 1).trim()
     const decoded = decodeURIComponent(rawValue)
     const parsed = JSON.parse(decoded) as { role?: string | null }
     return normalizeRole(parsed.role)

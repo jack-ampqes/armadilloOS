@@ -22,18 +22,18 @@ function InventoryScanContent() {
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const { hasPermission } = usePermissions();
+  const { hasPermission, role } = usePermissions();
 
   useEffect(() => {
-    if (!hasPermission('QrCodesBarcodes')) {
+    // Only redirect once we know the role; while role is null (cookie not read yet) stay on page
+    if (role !== null && !hasPermission('QrCodesBarcodes')) {
       router.push('/inventory');
       return;
     }
-
     if (sku) {
       fetchProductAndInventory();
     }
-  }, [sku]);
+  }, [sku, role, hasPermission]);
 
   const fetchProductAndInventory = async () => {
     try {
