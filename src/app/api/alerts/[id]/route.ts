@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { supabaseAdmin } from '@/lib/supabase'
+import { mapAlertRowToApi } from '@/lib/quote-supabase'
 
 export async function PATCH(
   request: NextRequest,
@@ -12,25 +11,30 @@ export async function PATCH(
     const body = await request.json()
     const { read, resolved } = body
 
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (read !== undefined) {
       updateData.read = read
     }
     if (resolved !== undefined) {
       updateData.resolved = resolved
-      if (resolved) {
-        updateData.resolvedAt = new Date()
-      } else {
-        updateData.resolvedAt = null
-      }
+      updateData.resolved_at = resolved ? new Date().toISOString() : null
     }
 
-    const alert = await prisma.alert.update({
-      where: { id },
-      data: updateData,
-    })
+    const { data: alert, error } = await supabaseAdmin
+      .from('alerts')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
 
-    return NextResponse.json(alert)
+    if (error) {
+      console.error('Error updating alert:', error)
+      return NextResponse.json(
+        { error: 'Failed to update alert' },
+        { status: 500 }
+      )
+    }
+    return NextResponse.json(mapAlertRowToApi((alert ?? {}) as Record<string, unknown>))
   } catch (error) {
     console.error('Error updating alert:', error)
     return NextResponse.json(
@@ -46,11 +50,15 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
+    const { error } = await supabaseAdmin.from('alerts').delete().eq('id', id)
 
-    await prisma.alert.delete({
-      where: { id },
-    })
-
+    if (error) {
+      console.error('Error deleting alert:', error)
+      return NextResponse.json(
+        { error: 'Failed to delete alert' },
+        { status: 500 }
+      )
+    }
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting alert:', error)

@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import { checkQuoteExpirationAlerts } from '@/lib/alerts'
 import { getDefaultQuickBooksCredentials } from '@/lib/quickbooks-connection'
 import { pushQuoteToQuickBooks } from '@/lib/quote-quickbooks'
 import { generateQuoteNumber } from '@/lib/quote-number'
 import { requirePermission } from '@/lib/auth'
-
-const prisma = new PrismaClient()
+import { supabaseAdmin } from '@/lib/supabase'
+import {
+  mapQuoteRowToApi,
+  quoteApiToInsertRow,
+  quoteItemApiToInsertRow,
+  quoteRowToQuickBooksShape,
+  type QuoteWithItemsRow,
+} from '@/lib/quote-supabase'
 
 // GET /api/quotes - Get all quotes
 export async function GET(request: NextRequest) {
@@ -16,27 +21,26 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const quotes = await prisma.quote.findMany({
-      include: {
-        quoteItems: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    })
+    const { data: rows, error } = await supabaseAdmin
+      .from('quotes')
+      .select('*, quote_items(*)')
+      .order('created_at', { ascending: false })
 
+    if (error) {
+      console.error('Error fetching quotes:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch quotes' },
+        { status: 500 }
+      )
+    }
+
+    const quotes = (rows || []).map((r) => mapQuoteRowToApi(r as QuoteWithItemsRow))
     return NextResponse.json(quotes)
   } catch (error) {
     console.error('Error fetching quotes:', error)
-    const message = error instanceof Error ? error.message : 'Failed to fetch quotes'
-    const isDbError = /prisma|database|connection|sqlite|ENOENT|connect/i.test(message)
     return NextResponse.json(
-      {
-        error: isDbError
-          ? 'Database unavailable. Set DATABASE_URL in Vercel for production (e.g. a hosted Postgres or SQLite URL).'
-          : 'Failed to fetch quotes',
-      },
-      { status: isDbError ? 503 : 500 }
+      { error: 'Failed to fetch quotes' },
+      { status: 500 }
     )
   }
 }
@@ -50,7 +54,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    
+
     const {
       customerName,
       customerEmail,
@@ -81,100 +85,136 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Calculate subtotal
     const subtotal = quoteItems.reduce(
-      (sum: number, item: { unitPrice: number; quantity: number }) => 
-        sum + (item.unitPrice * item.quantity),
+      (sum: number, item: { unitPrice: number; quantity: number }) =>
+        sum + item.unitPrice * item.quantity,
       0
     )
-
-    // Calculate discount
     let discountAmount = 0
     if (discountType && discountValue > 0) {
-      if (discountType === 'percentage') {
-        discountAmount = subtotal * (discountValue / 100)
-      } else {
-        discountAmount = discountValue
-      }
+      discountAmount = discountType === 'percentage' ? subtotal * (discountValue / 100) : discountValue
     }
-
-    // Calculate total
     const total = subtotal - discountAmount
 
-    // Generate quote number [YY][NNNN], e.g. 260001
-    const quoteNumber = await generateQuoteNumber(prisma)
+    const quoteNumber = await generateQuoteNumber()
 
-    // Create the quote with items
-    const quote = await prisma.quote.create({
-      data: {
-        quoteNumber,
-        customerName,
-        customerEmail,
-        customerPhone,
-        customerAddress,
-        customerCity,
-        customerState,
-        customerZip,
-        customerCountry,
-        subtotal,
-        discountType,
-        discountValue,
-        discountAmount,
-        total,
-        validUntil: validUntil ? new Date(validUntil) : null,
-        notes,
-        quoteItems: {
-          create: quoteItems.map((item: {
-            productId?: string | null
-            productName: string
-            sku?: string
-            quantity: number
-            unitPrice: number
-          }) => ({
-            productId: item.productId || null,
-            productName: item.productName,
-            sku: item.sku || null,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            totalPrice: item.unitPrice * item.quantity,
-          })),
-        },
-      },
-      include: {
-        quoteItems: true,
-      },
+    const insertRow = quoteApiToInsertRow({
+      quoteNumber,
+      customerName,
+      customerEmail,
+      customerPhone,
+      customerAddress,
+      customerCity,
+      customerState,
+      customerZip,
+      customerCountry,
+      subtotal,
+      discountType,
+      discountValue,
+      discountAmount,
+      total,
+      validUntil: validUntil ? new Date(validUntil).toISOString() : null,
+      notes,
     })
 
-    // Check for quote expiration alerts after creation
+    const { data: quoteRow, error: quoteError } = await supabaseAdmin
+      .from('quotes')
+      .insert(insertRow)
+      .select()
+      .single()
+
+    if (quoteError || !quoteRow) {
+      console.error('Error creating quote:', quoteError)
+      return NextResponse.json(
+        { error: 'Failed to create quote' },
+        { status: 500 }
+      )
+    }
+
+    const itemsToInsert = quoteItems.map(
+      (item: {
+        productId?: string | null
+        productName: string
+        sku?: string
+        quantity: number
+        unitPrice: number
+      }) =>
+        quoteItemApiToInsertRow(quoteRow.id, {
+          productId: item.productId ?? null,
+          productName: item.productName,
+          sku: item.sku ?? null,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.unitPrice * item.quantity,
+        })
+    )
+
+    const { error: itemsError } = await supabaseAdmin.from('quote_items').insert(itemsToInsert)
+    if (itemsError) {
+      console.error('Error creating quote items:', itemsError)
+      await supabaseAdmin.from('quotes').delete().eq('id', quoteRow.id)
+      return NextResponse.json(
+        { error: 'Failed to create quote items' },
+        { status: 500 }
+      )
+    }
+
     try {
       await checkQuoteExpirationAlerts()
     } catch (alertError) {
       console.error('Error checking alerts after quote creation:', alertError)
-      // Don't fail the request if alert check fails
     }
 
-    // Always push to QuickBooks after creating (on QB error return warning, still 201)
-    if (quote) {
+    const quoteWithItems: QuoteWithItemsRow = {
+      ...quoteRow,
+      quote_items: quoteItems.map(
+        (item: { productName: string; sku?: string; quantity: number; unitPrice: number }) => ({
+          id: '',
+          quote_id: quoteRow.id,
+          product_id: null,
+          product_name: item.productName,
+          sku: item.sku ?? null,
+          quantity: item.quantity,
+          unit_price: item.unitPrice,
+          total_price: item.unitPrice * item.quantity,
+        })
+      ),
+    }
+    const quoteApi = mapQuoteRowToApi(quoteWithItems)
+
+    if (quoteRow) {
       try {
         const creds = await getDefaultQuickBooksCredentials()
-        const { quickbooksEstimateId } = await pushQuoteToQuickBooks(quote, creds)
-        const now = new Date()
-        const updated = await prisma.quote.update({
-          where: { id: quote.id },
-          data: { quickbooksEstimateId, quickbooksSyncedAt: now },
-          include: { quoteItems: true },
-        })
-        return NextResponse.json(updated, { status: 201 })
+        const shape = quoteRowToQuickBooksShape(quoteWithItems)
+        const { quickbooksEstimateId } = await pushQuoteToQuickBooks(shape, creds)
+        const now = new Date().toISOString()
+        await supabaseAdmin
+          .from('quotes')
+          .update({ quickbooks_estimate_id: quickbooksEstimateId, quickbooks_synced_at: now })
+          .eq('id', quoteRow.id)
+        const { data: updated } = await supabaseAdmin
+          .from('quotes')
+          .select('*, quote_items(*)')
+          .eq('id', quoteRow.id)
+          .single()
+        if (updated) {
+          return NextResponse.json(mapQuoteRowToApi(updated as QuoteWithItemsRow), { status: 201 })
+        }
+        return NextResponse.json(quoteApi, { status: 201 })
       } catch (qbError) {
         console.error('QuickBooks push after quote create:', qbError)
         return NextResponse.json(
-          { ...quote, warning: (qbError instanceof Error ? qbError.message : 'Could not push to QuickBooks') },
+          {
+            ...quoteApi,
+            warning:
+              qbError instanceof Error ? qbError.message : 'Could not push to QuickBooks',
+          },
           { status: 201 }
         )
       }
     }
 
-    return NextResponse.json(quote, { status: 201 })
+    return NextResponse.json(quoteApi, { status: 201 })
   } catch (error) {
     console.error('Error creating quote:', error)
     return NextResponse.json(

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import { getDefaultQuickBooksCredentials } from '@/lib/quickbooks-connection'
 import { pushQuoteToQuickBooks } from '@/lib/quote-quickbooks'
-
-const prisma = new PrismaClient()
+import { supabaseAdmin } from '@/lib/supabase'
+import { quoteRowToQuickBooksShape, type QuoteWithItemsRow } from '@/lib/quote-supabase'
 
 /** POST /api/quotes/[id]/push-to-quickbooks — push this quote to QuickBooks (create or update estimate). */
 export async function POST(
@@ -12,30 +11,36 @@ export async function POST(
 ) {
   try {
     const { id } = await params
-    const quote = await prisma.quote.findUnique({
-      where: { id },
-      include: { quoteItems: true },
-    })
-    if (!quote) {
+    const { data: quoteRow, error } = await supabaseAdmin
+      .from('quotes')
+      .select('*, quote_items(*)')
+      .eq('id', id)
+      .single()
+
+    if (error || !quoteRow) {
       return NextResponse.json({ ok: false, error: 'Quote not found' }, { status: 404 })
     }
 
+    const quote = quoteRowToQuickBooksShape(quoteRow as QuoteWithItemsRow)
     const creds = await getDefaultQuickBooksCredentials()
     const { quickbooksEstimateId } = await pushQuoteToQuickBooks(quote, creds)
 
-    const now = new Date()
-    await prisma.quote.update({
-      where: { id },
-      data: {
-        quickbooksEstimateId,
-        quickbooksSyncedAt: now,
-      },
-    })
+    const now = new Date().toISOString()
+    await supabaseAdmin
+      .from('quotes')
+      .update({
+        quickbooks_estimate_id: quickbooksEstimateId,
+        quickbooks_synced_at: now,
+      })
+      .eq('id', id)
 
     return NextResponse.json({ ok: true, quickbooksEstimateId })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Failed to push to QuickBooks'
-    const isConfig = message.includes('not configured') || message.includes('Reconnect') || message.includes('QuickBooks')
+    const isConfig =
+      message.includes('not configured') ||
+      message.includes('Reconnect') ||
+      message.includes('QuickBooks')
     return NextResponse.json(
       { ok: false, error: message },
       { status: isConfig ? 401 : 502 }

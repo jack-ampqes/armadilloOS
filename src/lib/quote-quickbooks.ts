@@ -9,7 +9,7 @@ import {
   type QuickBooksEstimateLine,
 } from './quickbooks'
 
-/** Quote shape used for pushing to QuickBooks (from Prisma or API). */
+/** Quote shape used for pushing to QuickBooks (from Supabase or API). */
 export interface QuoteForQuickBooks {
   quoteNumber: string
   customerName: string

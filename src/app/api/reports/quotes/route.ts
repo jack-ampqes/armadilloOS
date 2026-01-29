@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { supabaseAdmin } from '@/lib/supabase'
+import type { QuoteWithItemsRow } from '@/lib/quote-supabase'
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,42 +8,45 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
 
-    // Build date filter
-    const dateFilter: any = {}
-    if (startDate || endDate) {
-      dateFilter.createdAt = {}
-      if (startDate) {
-        dateFilter.createdAt.gte = new Date(startDate)
-      }
-      if (endDate) {
-        dateFilter.createdAt.lte = new Date(endDate)
-      }
+    let query = supabaseAdmin
+      .from('quotes')
+      .select('*, quote_items(*)')
+      .order('created_at', { ascending: false })
+
+    if (startDate) {
+      query = query.gte('created_at', new Date(startDate).toISOString())
+    }
+    if (endDate) {
+      query = query.lte('created_at', new Date(endDate).toISOString())
     }
 
-    // Fetch all quotes
-    const quotes = await prisma.quote.findMany({
-      where: dateFilter,
-      include: {
-        quoteItems: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    })
+    const { data: rows, error } = await query
 
-    // Calculate metrics
+    if (error) {
+      console.error('Error fetching quotes for report:', error)
+      return NextResponse.json(
+        { error: 'Failed to generate quote report' },
+        { status: 500 }
+      )
+    }
+
+    const quotes = (rows || []) as QuoteWithItemsRow[]
+
     const totalQuotes = quotes.length
-    const acceptedQuotes = quotes.filter(q => q.status === 'ACCEPTED').length
-    const sentQuotes = quotes.filter(q => q.status === 'SENT').length
-    const draftQuotes = quotes.filter(q => q.status === 'DRAFT').length
-    const rejectedQuotes = quotes.filter(q => q.status === 'REJECTED').length
-    const expiredQuotes = quotes.filter(q => q.status === 'EXPIRED' || (q.validUntil && new Date(q.validUntil) < new Date())).length
+    const acceptedQuotes = quotes.filter((q) => q.status === 'ACCEPTED').length
+    const sentQuotes = quotes.filter((q) => q.status === 'SENT').length
+    const draftQuotes = quotes.filter((q) => q.status === 'DRAFT').length
+    const rejectedQuotes = quotes.filter((q) => q.status === 'REJECTED').length
+    const expiredQuotes = quotes.filter(
+      (q) =>
+        q.status === 'EXPIRED' ||
+        (q.valid_until && new Date(q.valid_until) < new Date())
+    ).length
 
     const totalValue = quotes.reduce((sum, q) => sum + q.total, 0)
     const averageQuoteValue = totalQuotes > 0 ? totalValue / totalQuotes : 0
     const conversionRate = sentQuotes > 0 ? (acceptedQuotes / sentQuotes) * 100 : 0
 
-    // Status breakdown
     const statusBreakdown = [
       { name: 'Draft', value: draftQuotes },
       { name: 'Sent', value: sentQuotes },
@@ -53,10 +55,9 @@ export async function GET(request: NextRequest) {
       { name: 'Expired', value: expiredQuotes },
     ]
 
-    // Quotes by customer
     const quotesByCustomer: Record<string, { count: number; totalValue: number }> = {}
-    quotes.forEach(quote => {
-      const customerName = quote.customerName
+    quotes.forEach((quote) => {
+      const customerName = quote.customer_name
       if (!quotesByCustomer[customerName]) {
         quotesByCustomer[customerName] = { count: 0, totalValue: 0 }
       }
@@ -69,12 +70,10 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.value - a.value)
       .slice(0, 10)
 
-    // Quote value distribution over time (monthly)
     const quotesByMonth: Record<string, { count: number; totalValue: number }> = {}
-    quotes.forEach(quote => {
-      const date = new Date(quote.createdAt)
+    quotes.forEach((quote) => {
+      const date = new Date(quote.created_at)
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-      
       if (!quotesByMonth[monthKey]) {
         quotesByMonth[monthKey] = { count: 0, totalValue: 0 }
       }
@@ -86,14 +85,14 @@ export async function GET(request: NextRequest) {
       .map(([date, data]) => ({ date, count: data.count, value: data.totalValue }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
-    // Expiring soon (within 7 days)
     const now = new Date()
     const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-    const expiringSoon = quotes.filter(q => 
-      q.validUntil && 
-      q.status === 'SENT' &&
-      new Date(q.validUntil) >= now &&
-      new Date(q.validUntil) <= sevenDaysFromNow
+    const expiringSoon = quotes.filter(
+      (q) =>
+        q.valid_until &&
+        q.status === 'SENT' &&
+        new Date(q.valid_until) >= now &&
+        new Date(q.valid_until) <= sevenDaysFromNow
     )
 
     return NextResponse.json({
@@ -111,12 +110,12 @@ export async function GET(request: NextRequest) {
       statusBreakdown,
       topCustomers,
       quoteTrend,
-      expiringSoon: expiringSoon.map(q => ({
+      expiringSoon: expiringSoon.map((q) => ({
         id: q.id,
-        quoteNumber: q.quoteNumber,
-        customerName: q.customerName,
+        quoteNumber: q.quote_number,
+        customerName: q.customer_name,
         total: q.total,
-        validUntil: q.validUntil,
+        validUntil: q.valid_until ?? null,
       })),
     })
   } catch (error) {

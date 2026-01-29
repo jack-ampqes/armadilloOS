@@ -49,8 +49,9 @@ export default function QuotesPage() {
   const { hasPermission, role } = usePermissions()
   const canQuote = hasPermission('Quoting') || role === null
 
+  // Load quotes from DB immediately; sync from QuickBooks only when user clicks Sync
   useEffect(() => {
-    loadQuotes()
+    fetchQuotes()
   }, [])
 
   // Auto-dismiss sync toast after 4 seconds
@@ -65,13 +66,21 @@ export default function QuotesPage() {
     setError(null)
     try {
       const response = await fetch('/api/quotes')
-      
-      if (response.ok) {
-        const data = await response.json()
-        setQuotes(Array.isArray(data) ? data : [])
+      const data = await response.json().catch(() => null)
+
+      if (response.ok && Array.isArray(data)) {
+        // Normalize in case API returns snake_case or missing fields
+        setQuotes(
+          data.map((q: Record<string, unknown>) => ({
+            ...q,
+            quoteItems: Array.isArray(q.quoteItems) ? q.quoteItems : [],
+            createdAt: (q.createdAt ?? q.created_at ?? new Date().toISOString()) as string,
+          })) as Quote[]
+        )
+      } else if (!response.ok) {
+        setError((data && typeof data.error === 'string' ? data.error : null) || 'Failed to load quotes')
+        setQuotes([])
       } else {
-        const errorData = await response.json().catch(() => ({}))
-        setError(errorData.error || 'Failed to load quotes')
         setQuotes([])
       }
     } catch (error) {
@@ -83,19 +92,21 @@ export default function QuotesPage() {
     }
   }
 
-  /** Sync from QuickBooks then fetch quotes. Used on page load and when user clicks Sync. */
-  const loadQuotes = async () => {
-    setLoading(true)
-    setError(null)
+  /** Sync from QuickBooks then refresh the list. Only runs when user clicks the Sync button. */
+  const syncFromQuickBooks = async () => {
     setSyncMessage(null)
+    const wasLoading = loading
+    if (!wasLoading) setLoading(true)
     try {
       const res = await fetch('/api/quotes/sync-from-quickbooks', { method: 'POST' })
       const data = await res.json().catch(() => ({}))
-      if (res.ok && data.ok && (data.created > 0 || data.updated > 0)) {
+      if (res.ok && data?.ok && (Number(data.created) > 0 || Number(data.updated) > 0)) {
         setSyncMessage(`Synced: ${data.created ?? 0} created, ${data.updated ?? 0} updated.`)
+      } else if (!res.ok && data?.error) {
+        setSyncMessage(data.error)
       }
     } catch {
-      // QB may not be connected; continue to show local quotes
+      setSyncMessage('QuickBooks sync failed')
     }
     await fetchQuotes()
   }
@@ -122,7 +133,7 @@ export default function QuotesPage() {
         if (pa.suffix !== pb.suffix) return pb.suffix - pa.suffix
       }
       // Fallback: newest created first (createdAt is always returned from API)
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
     })
 
   const getStatusVariant = (status: string): "default" | "secondary" | "outline" | "success" | "warning" | "destructive" => {
@@ -173,7 +184,7 @@ export default function QuotesPage() {
             <Button
               variant="outline"
               size="icon"
-              onClick={loadQuotes}
+              onClick={syncFromQuickBooks}
               disabled={loading}
               title="Sync from QuickBooks and refresh"
               className="group"
@@ -263,11 +274,11 @@ export default function QuotesPage() {
 
                       <div className="flex items-center gap-4 text-sm">
                         <span className="text-white/60">
-                          {quote.quoteItems.length} item{quote.quoteItems.length !== 1 ? 's' : ''}
+                          {(quote.quoteItems ?? []).length} item{(quote.quoteItems ?? []).length !== 1 ? 's' : ''}
                         </span>
                         <span className="text-white/40">•</span>
                         <span className="text-white/60">
-                          Created: {formatDate(quote.createdAt)}
+                          Created: {formatDate(quote.createdAt ?? '')}
                         </span>
                         {quote.validUntil && (
                           <>

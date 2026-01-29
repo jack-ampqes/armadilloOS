@@ -1,7 +1,4 @@
-import { PrismaClient } from '@prisma/client'
 import { supabaseAdmin } from './supabase'
-
-const prisma = new PrismaClient()
 
 export type AlertType = 'low_stock' | 'out_of_stock' | 'pending_order' | 'quote_expired' | 'manufacturer_order'
 export type AlertSeverity = 'critical' | 'warning' | 'info'
@@ -17,42 +14,48 @@ interface CreateAlertParams {
 
 export async function createAlert(params: CreateAlertParams) {
   try {
-    // Check if alert already exists for this entity
     if (params.entityId && params.entityType) {
-      const existing = await prisma.alert.findFirst({
-        where: {
-          type: params.type,
-          entityType: params.entityType,
-          entityId: params.entityId,
-          resolved: false,
-        },
-      })
+      const { data: existingRows } = await supabaseAdmin
+        .from('alerts')
+        .select('id')
+        .eq('type', params.type)
+        .eq('entity_type', params.entityType)
+        .eq('entity_id', params.entityId)
+        .eq('resolved', false)
+        .limit(1)
 
+      const existing = existingRows?.[0]
       if (existing) {
-        // Update existing alert instead of creating duplicate
-        return await prisma.alert.update({
-          where: { id: existing.id },
-          data: {
+        const now = new Date().toISOString()
+        const { data: updated } = await supabaseAdmin
+          .from('alerts')
+          .update({
             title: params.title,
             message: params.message,
             severity: params.severity,
             read: false,
-            createdAt: new Date(),
-          },
-        })
+            created_at: now,
+          })
+          .eq('id', existing.id)
+          .select()
+          .single()
+        return updated
       }
     }
 
-    return await prisma.alert.create({
-      data: {
+    const { data: inserted } = await supabaseAdmin
+      .from('alerts')
+      .insert({
         type: params.type,
         severity: params.severity,
         title: params.title,
         message: params.message,
-        entityType: params.entityType,
-        entityId: params.entityId,
-      },
-    })
+        entity_type: params.entityType ?? null,
+        entity_id: params.entityId ?? null,
+      })
+      .select()
+      .single()
+    return inserted
   } catch (error) {
     console.error('Error creating alert:', error)
     throw error
@@ -84,7 +87,6 @@ export async function checkLowStockAlerts() {
       const productName = product?.name || item.name || item.sku
 
       if (quantity === 0) {
-        // Out of stock
         await createAlert({
           type: 'out_of_stock',
           severity: 'critical',
@@ -94,7 +96,6 @@ export async function checkLowStockAlerts() {
           entityId: item.sku,
         })
       } else if (quantity > 0 && quantity <= minStock) {
-        // Low stock
         await createAlert({
           type: 'low_stock',
           severity: 'warning',
@@ -104,19 +105,14 @@ export async function checkLowStockAlerts() {
           entityId: item.sku,
         })
       } else {
-        // Stock is good - resolve any existing alerts
-        await prisma.alert.updateMany({
-          where: {
-            type: { in: ['low_stock', 'out_of_stock'] },
-            entityType: 'product',
-            entityId: item.sku,
-            resolved: false,
-          },
-          data: {
-            resolved: true,
-            resolvedAt: new Date(),
-          },
-        })
+        const now = new Date().toISOString()
+        await supabaseAdmin
+          .from('alerts')
+          .update({ resolved: true, resolved_at: now })
+          .in('type', ['low_stock', 'out_of_stock'])
+          .eq('entity_type', 'product')
+          .eq('entity_id', item.sku)
+          .eq('resolved', false)
       }
     }
   } catch (error) {
@@ -127,50 +123,44 @@ export async function checkLowStockAlerts() {
 export async function checkQuoteExpirationAlerts() {
   try {
     const now = new Date()
-    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+    const nowIso = now.toISOString()
+    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-    // Find quotes expiring soon
-    const expiringQuotes = await prisma.quote.findMany({
-      where: {
-        status: 'SENT',
-        validUntil: {
-          gte: now,
-          lte: sevenDaysFromNow,
-        },
-      },
-    })
+    const { data: expiringRows } = await supabaseAdmin
+      .from('quotes')
+      .select('*')
+      .eq('status', 'SENT')
+      .gte('valid_until', nowIso)
+      .lte('valid_until', sevenDaysFromNow)
 
-    for (const quote of expiringQuotes) {
-      const daysUntilExpiry = Math.ceil(
-        (new Date(quote.validUntil!).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-      )
+    for (const quote of expiringRows || []) {
+      const validUntil = quote.valid_until ? new Date(quote.valid_until) : null
+      const daysUntilExpiry = validUntil
+        ? Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        : 0
 
       await createAlert({
         type: 'quote_expired',
         severity: daysUntilExpiry <= 1 ? 'critical' : 'warning',
-        title: `Quote Expiring: ${quote.quoteNumber}`,
-        message: `Quote ${quote.quoteNumber} for ${quote.customerName} expires in ${daysUntilExpiry} day(s).`,
+        title: `Quote Expiring: ${quote.quote_number}`,
+        message: `Quote ${quote.quote_number} for ${quote.customer_name} expires in ${daysUntilExpiry} day(s).`,
         entityType: 'quote',
         entityId: quote.id,
       })
     }
 
-    // Find expired quotes
-    const expiredQuotes = await prisma.quote.findMany({
-      where: {
-        status: { not: 'EXPIRED' },
-        validUntil: {
-          lt: now,
-        },
-      },
-    })
+    const { data: expiredRows } = await supabaseAdmin
+      .from('quotes')
+      .select('*')
+      .neq('status', 'EXPIRED')
+      .lt('valid_until', nowIso)
 
-    for (const quote of expiredQuotes) {
+    for (const quote of expiredRows || []) {
       await createAlert({
         type: 'quote_expired',
         severity: 'critical',
-        title: `Quote Expired: ${quote.quoteNumber}`,
-        message: `Quote ${quote.quoteNumber} for ${quote.customerName} has expired.`,
+        title: `Quote Expired: ${quote.quote_number}`,
+        message: `Quote ${quote.quote_number} for ${quote.customer_name} has expired.`,
         entityType: 'quote',
         entityId: quote.id,
       })
@@ -184,7 +174,6 @@ export async function checkPendingOrdersAlerts() {
   try {
     // This would check for orders that have been pending for too long
     // For now, we'll skip this as orders come from Shopify
-    // Could be implemented if we track order creation dates locally
   } catch (error) {
     console.error('Error checking pending orders alerts:', error)
   }

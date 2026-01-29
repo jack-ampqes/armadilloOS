@@ -3,10 +3,7 @@ import { getOrders } from '@/lib/shopify'
 import { getDefaultShopifyCredentials } from '@/lib/shopify-connection'
 import { getDefaultQuickBooksCredentials } from '@/lib/quickbooks-connection'
 import { getProfitAndLoss, parseProfitAndLoss } from '@/lib/quickbooks'
-import { PrismaClient } from '@prisma/client'
 import { supabaseAdmin } from '@/lib/supabase'
-
-const prisma = new PrismaClient()
 
 type AnalyticsPeriod = 'thisMonth' | 'last3Months' | 'last6Months' | 'ytd' | 'lastYear' | 'allTime'
 
@@ -138,13 +135,10 @@ export async function GET(request: NextRequest) {
     const outOfStockCount = (inventoryData || []).filter(item => (item.quantity || 0) === 0).length
 
     // Quotes stats
-    const activeQuotes = await prisma.quote.count({
-      where: {
-        status: {
-          in: ['DRAFT', 'SENT']
-        }
-      }
-    })
+    const { count: activeQuotes } = await supabaseAdmin
+      .from('quotes')
+      .select('id', { count: 'exact', head: true })
+      .in('status', ['DRAFT', 'SENT'])
 
     // Top customers (last 30 days)
     const customerSales: Record<string, number> = {}
@@ -210,7 +204,7 @@ export async function GET(request: NextRequest) {
         outOfStock: outOfStockCount,
       },
       quotes: {
-        active: activeQuotes,
+        active: activeQuotes ?? 0,
       },
       charts: {
         revenueTrend: revenueTrendData,
@@ -240,13 +234,10 @@ export async function GET(request: NextRequest) {
 
       const outOfStockCount = (inventoryData || []).filter(item => (item.quantity || 0) === 0).length
 
-      const activeQuotes = await prisma.quote.count({
-        where: {
-          status: {
-            in: ['DRAFT', 'SENT']
-          }
-        }
-      })
+      const { count: activeQuotes } = await supabaseAdmin
+        .from('quotes')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['DRAFT', 'SENT'])
 
       // Try to get QuickBooks data even if Shopify fails
       let quickbooks: {
@@ -299,7 +290,7 @@ export async function GET(request: NextRequest) {
           outOfStock: outOfStockCount,
         },
         quotes: {
-          active: activeQuotes,
+          active: activeQuotes ?? 0,
         },
         charts: {
           revenueTrend: [],

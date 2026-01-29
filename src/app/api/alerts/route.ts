@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import { runAllAlertChecks } from '@/lib/alerts'
-
-const prisma = new PrismaClient()
+import { supabaseAdmin } from '@/lib/supabase'
+import { mapAlertRowToApi } from '@/lib/quote-supabase'
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,45 +9,50 @@ export async function GET(request: NextRequest) {
     const resolved = searchParams.get('resolved')
     const type = searchParams.get('type')
     const severity = searchParams.get('severity')
-    const limit = parseInt(searchParams.get('limit') || '50')
+    const limit = parseInt(searchParams.get('limit') || '50', 10)
 
-    const where: any = {}
-    
-    if (resolved === 'false' || resolved === null) {
-      where.resolved = false
+    let query = supabaseAdmin
+      .from('alerts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+
+    if (resolved === 'false' || resolved === null || resolved === '') {
+      query = query.eq('resolved', false)
     } else if (resolved === 'true') {
-      where.resolved = true
+      query = query.eq('resolved', true)
     }
-
     if (type) {
-      where.type = type
+      query = query.eq('type', type)
     }
-
     if (severity) {
-      where.severity = severity
+      query = query.eq('severity', severity)
     }
 
-    const alerts = await prisma.alert.findMany({
-      where,
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: limit,
-    })
+    const { data: rows, error } = await query
 
+    if (error) {
+      console.error('Error fetching alerts:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch alerts' },
+        { status: 500 }
+      )
+    }
+
+    const alerts = (rows || []).map((r) => mapAlertRowToApi(r as Record<string, unknown>))
     return NextResponse.json(alerts)
   } catch (error) {
     console.error('Error fetching alerts:', error)
-    // Return empty array so nav/layout don't break when DB is unavailable (e.g. production without DATABASE_URL)
-    return NextResponse.json([])
+    return NextResponse.json(
+      { error: 'Failed to fetch alerts' },
+      { status: 500 }
+    )
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Run alert checks
     await runAllAlertChecks()
-    
     return NextResponse.json({ success: true, message: 'Alert checks completed' })
   } catch (error) {
     console.error('Error running alert checks:', error)
@@ -71,25 +75,30 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (read !== undefined) {
       updateData.read = read
     }
     if (resolved !== undefined) {
       updateData.resolved = resolved
-      if (resolved) {
-        updateData.resolvedAt = new Date()
-      } else {
-        updateData.resolvedAt = null
-      }
+      updateData.resolved_at = resolved ? new Date().toISOString() : null
     }
 
-    const alert = await prisma.alert.update({
-      where: { id },
-      data: updateData,
-    })
+    const { data: alert, error } = await supabaseAdmin
+      .from('alerts')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
 
-    return NextResponse.json(alert)
+    if (error) {
+      console.error('Error updating alert:', error)
+      return NextResponse.json(
+        { error: 'Failed to update alert' },
+        { status: 500 }
+      )
+    }
+    return NextResponse.json(mapAlertRowToApi((alert ?? {}) as Record<string, unknown>))
   } catch (error) {
     console.error('Error updating alert:', error)
     return NextResponse.json(
