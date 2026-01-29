@@ -243,9 +243,9 @@ export default function QRCodesPage() {
                 <Card key={item.sku} className={`hover:shadow-md transition-shadow ${loading ? 'opacity-60' : 'opacity-100'}`}>
                   <CardContent className="p-4">
                   <div className="text-center mb-3">
-                    <h3 className="font-semibold text-sm mb-1 line-clamp-2 text-white" title={item.name}>
+                    <p className="text-xs font-normal text-white/90 line-clamp-2 mb-1" title={item.name}>
                       {item.name}
-                    </h3>
+                    </p>
                     <p className="text-xs text-white/60 font-mono">{item.sku}</p>
                   </div>
                   
