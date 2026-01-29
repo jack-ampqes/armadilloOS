@@ -16,7 +16,8 @@ import {
   LogOut,
   User,
   ScrollText,
-  AlertTriangle
+  AlertTriangle,
+  ShieldUser
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -34,6 +35,7 @@ const navigation = [
   { name: 'Sales Reps', href: '/sales-reps', icon: Tags },
   { name: 'Distributors', href: '/distributors', icon: Warehouse },
   { name: 'Alerts', href: '/alerts', icon: AlertTriangle },
+  { name: 'Users', href: '/admin/users', icon: ShieldUser },
 ]
 
 interface Alert {
@@ -222,6 +224,9 @@ export default function Navigation() {
               if (item.href === '/inventory/codes' && !hasPermission('QrCodesBarcodes')) {
                 return null
               }
+              if (item.href === '/admin/users' && !hasPermission('FullAccess')) {
+                return null
+              }
 
               const isActive = pathname === item.href
               const isAlerts = item.href === '/alerts'
@@ -283,6 +288,11 @@ export default function Navigation() {
               {/* Navigation */}
               <nav className="flex-1 px-4 space-y-2">
                 {navigation.map((item, index) => {
+                  if (item.href === '/orders' && !hasPermission('OrdersViewing')) return null
+                  if (item.href === '/quotes' && !hasPermission('Quoting')) return null
+                  if (item.href === '/inventory' && !hasPermission('InventoryViewing')) return null
+                  if (item.href === '/inventory/codes' && !hasPermission('QrCodesBarcodes')) return null
+                  if (item.href === '/admin/users' && !hasPermission('FullAccess')) return null
                   const isActive = pathname === item.href
                   const isAlerts = item.href === '/alerts'
                   const Icon = item.icon
