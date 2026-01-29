@@ -212,7 +212,8 @@ export default function InventoryPage() {
 
   const handleStockClick = (product: Product, e: React.MouseEvent) => {
     e.stopPropagation()
-    
+    if (!hasPermission('InventoryEditing')) return
+
     // Get click position relative to viewport
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     let x = rect.left + rect.width / 2 // Center horizontally on the cell
@@ -521,12 +522,12 @@ export default function InventoryPage() {
                           </div>
                         </TableCell>
                         <TableCell 
-                          className="text-white whitespace-nowrap"
-                          onClick={(e) => handleStockClick(product, e)}
+                          className={`text-white whitespace-nowrap ${hasPermission('InventoryEditing') ? 'cursor-pointer' : ''}`}
+                          onClick={hasPermission('InventoryEditing') ? (e) => handleStockClick(product, e) : undefined}
                         >
                           <span 
-                            className="font-semibold cursor-pointer hover:text-blue-400 transition-colors"
-                            title="Click to adjust stock"
+                            className={`font-semibold ${hasPermission('InventoryEditing') ? 'hover:text-blue-400 transition-colors' : ''}`}
+                            title={hasPermission('InventoryEditing') ? 'Click to adjust stock' : undefined}
                           >
                             {product.inventory?.quantity ?? 0}
                           </span>
@@ -601,8 +602,8 @@ export default function InventoryPage() {
         )}
       </div>
 
-      {/* Stock Adjustment Popup */}
-      {stockDialogOpen && (
+      {/* Stock Adjustment Popup — only for roles with InventoryEditing (Admin, Technician) */}
+      {hasPermission('InventoryEditing') && stockDialogOpen && (
         <>
           {/* Backdrop to close on click outside */}
           <div

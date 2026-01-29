@@ -599,73 +599,75 @@ export default function NewQuotePage() {
               </div>
             </div>
 
-            {/* Add Custom Item Button */}
-            <div className="mb-6">
-              {!showCustomItem ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowCustomItem(true)}
-                  className="w-full"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Custom Line Item
-                </Button>
-              ) : (
-                <div className="p-4 border border-white/20 rounded-lg space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                    <div className="sm:col-span-2">
-                      <Label htmlFor="customName">Item Name</Label>
-                      <Input
-                        id="customName"
-                        value={customItemName}
-                        onChange={(e) => setCustomItemName(e.target.value)}
-                        className="mt-1"
-                        placeholder="Custom item name"
-                      />
+            {/* Add Custom Item Button — only for roles with QuotingCustomItems (Admin) */}
+            {hasPermission('QuotingCustomItems') && (
+              <div className="mb-6">
+                {!showCustomItem ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowCustomItem(true)}
+                    className="w-full"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Custom Line Item
+                  </Button>
+                ) : (
+                  <div className="p-4 border border-white/20 rounded-lg space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                      <div className="sm:col-span-2">
+                        <Label htmlFor="customName">Item Name</Label>
+                        <Input
+                          id="customName"
+                          value={customItemName}
+                          onChange={(e) => setCustomItemName(e.target.value)}
+                          className="mt-1"
+                          placeholder="Custom item name"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="customSku">SKU (optional)</Label>
+                        <Input
+                          id="customSku"
+                          value={customItemSku}
+                          onChange={(e) => setCustomItemSku(e.target.value)}
+                          className="mt-1"
+                          placeholder="SKU"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="customPrice">Unit Price</Label>
+                        <Input
+                          id="customPrice"
+                          type="number"
+                          step="0.01"
+                          value={customItemPrice}
+                          onChange={(e) => setCustomItemPrice(e.target.value)}
+                          className="mt-1"
+                          placeholder="0.00"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <Label htmlFor="customSku">SKU (optional)</Label>
-                      <Input
-                        id="customSku"
-                        value={customItemSku}
-                        onChange={(e) => setCustomItemSku(e.target.value)}
-                        className="mt-1"
-                        placeholder="SKU"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="customPrice">Unit Price</Label>
-                      <Input
-                        id="customPrice"
-                        type="number"
-                        step="0.01"
-                        value={customItemPrice}
-                        onChange={(e) => setCustomItemPrice(e.target.value)}
-                        className="mt-1"
-                        placeholder="0.00"
-                      />
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={addCustomItem}
+                        disabled={!customItemName || !customItemPrice}
+                      >
+                        Add Item
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowCustomItem(false)}
+                      >
+                        Cancel
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      onClick={addCustomItem}
-                      disabled={!customItemName || !customItemPrice}
-                    >
-                      Add Item
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowCustomItem(false)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* Quote Items List */}
             {quoteItems.length === 0 ? (
