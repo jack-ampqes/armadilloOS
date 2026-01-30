@@ -353,7 +353,7 @@ export default function SalesRepsPage() {
                             geography={geo}
                             fill={isHover ? (rep ? color : '#454545') : color}
                             stroke={isAssigned ? '#454545' : '#181818'}
-                            strokeWidth={isAssigned ? 1.25 : 0.5}
+                            strokeWidth={0.8}
                             style={{
                               default: { outline: 'none' },
                               hover: { outline: 'none', cursor: canToggle ? 'pointer' : 'default' },
