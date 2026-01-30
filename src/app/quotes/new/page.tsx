@@ -80,6 +80,8 @@ export default function NewQuotePage() {
   
   // Other
   const [validDays, setValidDays] = useState('30')
+  /** Explicit Valid Until date (YYYY-MM-DD). When set, overrides validDays on submit. */
+  const [validUntilDate, setValidUntilDate] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
   
   // Product search
@@ -305,9 +307,11 @@ export default function NewQuotePage() {
 
     setLoading(true)
     try {
-      const validUntil = validDays 
-        ? new Date(Date.now() + parseInt(validDays) * 24 * 60 * 60 * 1000).toISOString()
-        : null
+      const validUntil = validUntilDate
+        ? new Date(validUntilDate + 'T12:00:00').toISOString()
+        : (validDays
+            ? new Date(Date.now() + parseInt(validDays) * 24 * 60 * 60 * 1000).toISOString()
+            : null)
 
       const response = await fetch('/api/quotes', {
         method: 'POST',
@@ -811,11 +815,30 @@ export default function NewQuotePage() {
                   className="mt-1 w-32"
                   placeholder="30"
                 />
-                {validDays && (
+                {validDays && !validUntilDate && (
                   <p className="text-sm text-white/60 mt-1">
                     Expires: {new Date(Date.now() + parseInt(validDays) * 24 * 60 * 60 * 1000).toLocaleDateString()}
                   </p>
                 )}
+              </div>
+
+              <div>
+                <Label htmlFor="validUntil">Valid Until (date)</Label>
+                <Input
+                  id="validUntil"
+                  type="date"
+                  value={
+                    validUntilDate ??
+                    (validDays
+                      ? new Date(Date.now() + parseInt(validDays) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+                      : '')
+                  }
+                  onChange={(e) => setValidUntilDate(e.target.value || null)}
+                  className="mt-1 w-48"
+                />
+                <p className="text-sm text-white/60 mt-1">
+                  Change this date to set when the quote expires. Defaults to the value from Valid For (days) above.
+                </p>
               </div>
               
               <div>

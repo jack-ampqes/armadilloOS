@@ -5,21 +5,12 @@ export async function GET() {
   try {
     const { data: salesReps, error } = await supabase
       .from('sales_reps')
-      .select(`
-        *,
-        orders(
-          id,
-          order_number,
-          total_amount,
-          status,
-          created_at
-        )
-      `)
+      .select('*')
       .order('name', { ascending: true })
 
     if (error) throw error
 
-    // Transform data to match expected format
+    // Transform data to match expected format (map uses territory; orders optional for future)
     const transformedSalesReps = salesReps?.map((rep: any) => ({
       id: rep.id,
       name: rep.name,
@@ -27,17 +18,18 @@ export async function GET() {
       phone: rep.phone,
       territory: rep.territory,
       commissionRate: rep.commission_rate ? parseFloat(rep.commission_rate) : null,
+      color: rep.color ?? null,
       createdAt: rep.created_at,
       updatedAt: rep.updated_at,
-      orders: (rep.orders || []).map((order: any) => ({
+      orders: Array.isArray(rep.orders) ? rep.orders.map((order: any) => ({
         id: order.id,
         orderNumber: order.order_number,
         totalAmount: parseFloat(order.total_amount),
         status: order.status,
         createdAt: order.created_at
-      })).sort((a: any, b: any) => 
+      })).sort((a: any, b: any) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
+      ) : []
     })) || []
 
     return NextResponse.json(transformedSalesReps)
@@ -53,7 +45,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, email, phone, territory, commissionRate } = body
+    const { name, email, phone, territory, commissionRate, color } = body
 
     const { data: salesRep, error } = await supabase
       .from('sales_reps')
@@ -62,7 +54,8 @@ export async function POST(request: NextRequest) {
         email,
         phone,
         territory,
-        commission_rate: commissionRate
+        commission_rate: commissionRate,
+        color: color ?? null
       })
       .select()
       .single()
@@ -77,6 +70,7 @@ export async function POST(request: NextRequest) {
       phone: salesRep.phone,
       territory: salesRep.territory,
       commissionRate: salesRep.commission_rate ? parseFloat(salesRep.commission_rate) : null,
+      color: salesRep.color ?? null,
       createdAt: salesRep.created_at,
       updatedAt: salesRep.updated_at
     }

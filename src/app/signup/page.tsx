@@ -91,7 +91,6 @@ export default function SignUpPage() {
               style={{ filter: 'brightness(0) invert(1)' }}
             />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">Armadillo Safety</h1>
           <p className="text-white/60 text-sm">Create your account</p>
         </div>
 

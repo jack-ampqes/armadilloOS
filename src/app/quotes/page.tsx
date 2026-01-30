@@ -135,6 +135,11 @@ export default function QuotesPage() {
       // Fallback: newest created first (createdAt is always returned from API)
       return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
     })
+  // Keep drafts at the top; don't send them to the bottom
+  const isDraft = (q: Quote) => (q.status || '').toUpperCase() === 'DRAFT'
+  const draftQuotes = filteredQuotes.filter(isDraft)
+  const nonDraftQuotes = filteredQuotes.filter((q) => !isDraft(q))
+  const sortedQuotes = [...draftQuotes, ...nonDraftQuotes]
 
   const getStatusVariant = (status: string): "default" | "secondary" | "outline" | "success" | "warning" | "destructive" => {
     switch (status) {
@@ -238,7 +243,7 @@ export default function QuotesPage() {
         transition={{ delay: 0.2 }}
         className="grid gap-4"
       >
-        {filteredQuotes.map((quote, index) => (
+        {sortedQuotes.map((quote, index) => (
           <motion.div
             key={quote.id}
             initial={{ opacity: 0, y: 20 }}
@@ -316,7 +321,7 @@ export default function QuotesPage() {
         ))}
       </motion.div>
 
-      {filteredQuotes.length === 0 && !error && (
+      {sortedQuotes.length === 0 && !error && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

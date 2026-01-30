@@ -87,6 +87,8 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
   
   // Other
   const [validDays, setValidDays] = useState('30')
+  /** Explicit Valid Until date (YYYY-MM-DD). When set, overrides validDays on submit. */
+  const [validUntilDate, setValidUntilDate] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
   const [pushToQuickBooks, setPushToQuickBooks] = useState(false)
   const { hasPermission, role } = usePermissions()
@@ -137,13 +139,16 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
         setDiscountValue(data.discountValue?.toString() || '')
         setNotes(data.notes || '')
         
-        // Calculate valid days from validUntil
+        // Set Valid Until date and derive valid days
         if (data.validUntil) {
           const validDate = new Date(data.validUntil)
+          setValidUntilDate(validDate.toISOString().slice(0, 10))
           const now = new Date()
           const diffTime = validDate.getTime() - now.getTime()
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
           setValidDays(diffDays > 0 ? diffDays.toString() : '30')
+        } else {
+          setValidUntilDate(null)
         }
         
         // Populate quote items
@@ -313,9 +318,11 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
 
     setLoading(true)
     try {
-      const validUntil = validDays 
-        ? new Date(Date.now() + parseInt(validDays) * 24 * 60 * 60 * 1000).toISOString()
-        : null
+      const validUntil = validUntilDate
+        ? new Date(validUntilDate + 'T12:00:00').toISOString()
+        : (validDays
+            ? new Date(Date.now() + parseInt(validDays) * 24 * 60 * 60 * 1000).toISOString()
+            : null)
 
       const response = await fetch(`/api/quotes/${id}`, {
         method: 'PATCH',
@@ -822,11 +829,30 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
                   className="mt-1 w-32"
                   placeholder="30"
                 />
-                {validDays && (
+                {validDays && !validUntilDate && (
                   <p className="text-sm text-white/60 mt-1">
                     Expires: {new Date(Date.now() + parseInt(validDays) * 24 * 60 * 60 * 1000).toLocaleDateString()}
                   </p>
                 )}
+              </div>
+
+              <div>
+                <Label htmlFor="validUntil">Valid Until (date)</Label>
+                <Input
+                  id="validUntil"
+                  type="date"
+                  value={
+                    validUntilDate ??
+                    (validDays
+                      ? new Date(Date.now() + parseInt(validDays) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+                      : '')
+                  }
+                  onChange={(e) => setValidUntilDate(e.target.value || null)}
+                  className="mt-1 w-48"
+                />
+                <p className="text-sm text-white/60 mt-1">
+                  Change this date to set when the quote expires. Defaults to the value from Valid For (days) above.
+                </p>
               </div>
               
               <div>

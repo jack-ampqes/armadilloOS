@@ -563,9 +563,38 @@ function ProfilePageContent() {
                   {profile.role || 'user'}
                 </Badge>
               </div>
-              <p className="text-white/40 text-xs mt-1">
-                Role cannot be changed from this page
-              </p>
+            </div>
+
+            <div className="flex justify-left space-x-3 pt-2">
+              {editing ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={handleCancel}
+                    disabled={saving}
+                    className="border-white/20 text-white hover:bg-white/10"
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="bg-white text-[#181818] hover:bg-white/90"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  onClick={() => setEditing(true)}
+                  className="bg-white text-[#181818] hover:bg-white/90"
+                >
+                  <Edit2 className="w-4 h-4 mr-2" />
+                  Edit Profile
+                </Button>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
@@ -591,19 +620,16 @@ function ProfilePageContent() {
                 <button
                   type="button"
                   onClick={() => setShopifyOpen((o) => !o)}
-                  className="flex w-full items-center justify-between gap-4 rounded-md py-1 text-left hover:bg-white/5 transition-colors"
+                  className="flex w-full items-center gap-2 rounded-md py-1 text-left hover:bg-white/5 transition-colors"
                   aria-expanded={shopifyOpen}
                 >
-                  <div className="flex items-center gap-2">
-                    <ChevronDown
-                      className={`h-5 w-5 text-white/60 shrink-0 transition-transform ${shopifyOpen ? '' : '-rotate-90'}`}
-                    />
-                    <div>
-                      <h3 className="text-white font-semibold">Shopify</h3>
-
-                    </div>
+                  <ChevronDown
+                    className={`h-5 w-5 text-white/60 shrink-0 transition-transform ${shopifyOpen ? '' : '-rotate-90'}`}
+                  />
+                  <div>
+                    <h3 className="text-white font-semibold">Shopify</h3>
                   </div>
-                  <Badge variant={shopifyStatus?.connected ? 'success' : 'secondary'}>
+                  <Badge variant={shopifyStatus?.connected ? 'success' : 'secondary'} className="shrink-0">
                     {shopifyStatus?.connected ? 'Connected' : 'Not connected'}
                   </Badge>
                 </button>
@@ -630,7 +656,7 @@ function ProfilePageContent() {
                         <p className="text-red-400 text-xs mt-2">{shopifyError}</p>
                       )}
                     </div>
-                    <div className="flex justify-end">
+                    <div className="flex justify-left">
                       <Button
                         type="button"
                         onClick={handleConnectShopify}
@@ -647,18 +673,16 @@ function ProfilePageContent() {
                 <button
                   type="button"
                   onClick={() => setQuickbooksOpen((o) => !o)}
-                  className="flex w-full items-center justify-between gap-4 rounded-md py-1 text-left hover:bg-white/5 transition-colors"
+                  className="flex w-full items-center gap-2 rounded-md py-1 text-left hover:bg-white/5 transition-colors"
                   aria-expanded={quickbooksOpen}
                 >
-                  <div className="flex items-center gap-2">
-                    <ChevronDown
-                      className={`h-5 w-5 text-white/60 shrink-0 transition-transform ${quickbooksOpen ? '' : '-rotate-90'}`}
-                    />
-                    <div>
-                      <h3 className="text-white font-semibold">QuickBooks</h3>
-                    </div>
+                  <ChevronDown
+                    className={`h-5 w-5 text-white/60 shrink-0 transition-transform ${quickbooksOpen ? '' : '-rotate-90'}`}
+                  />
+                  <div>
+                    <h3 className="text-white font-semibold">QuickBooks</h3>
                   </div>
-                  <Badge variant={quickbooksStatus?.connected ? 'success' : 'secondary'}>
+                  <Badge variant={quickbooksStatus?.connected ? 'success' : 'secondary'} className="shrink-0">
                     {quickbooksStatus?.connected ? 'Connected' : 'Not connected'}
                   </Badge>
                 </button>
@@ -697,7 +721,7 @@ function ProfilePageContent() {
                         )}
                       </>
                     )}
-                    <div className="flex justify-end">
+                    <div className="flex justify-left">
                       <Button
                         type="button"
                         onClick={handleConnectQuickBooks}
@@ -711,38 +735,6 @@ function ProfilePageContent() {
               </div>
             </>
           )}
-
-          <div className="mt-6 flex justify-end space-x-3">
-            {editing ? (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={handleCancel}
-                  disabled={saving}
-                  className="border-white/20 text-white hover:bg-white/10"
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="bg-white text-[#181818] hover:bg-white/90"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </>
-            ) : (
-              <Button
-                onClick={() => setEditing(true)}
-                className="bg-white text-[#181818] hover:bg-white/90"
-              >
-                <Edit2 className="w-4 h-4 mr-2" />
-                Edit Profile
-              </Button>
-            )}
-          </div>
         </Card>
       </div>
     </div>

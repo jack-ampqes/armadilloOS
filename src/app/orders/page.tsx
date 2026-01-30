@@ -1,13 +1,20 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Plus, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface Order {
   id: string
@@ -57,6 +64,8 @@ export default function OrdersPage() {
   const [error, setError] = useState<string | null>(null)
   const [shopifyConnection, setShopifyConnection] = useState<ShopifyConnection | null>(null)
   const [showScopes, setShowScopes] = useState(false)
+  const [sortBy, setSortBy] = useState<'date' | 'orderNumber' | 'customer' | 'status' | 'total'>('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   useEffect(() => {
     fetchOrders()
@@ -80,6 +89,39 @@ export default function OrdersPage() {
     order.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     order.status.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  const sortedOrders = useMemo(() => {
+    const list = [...filteredOrders]
+    const mult = sortDir === 'asc' ? 1 : -1
+    list.sort((a, b) => {
+      let cmp = 0
+      switch (sortBy) {
+        case 'date':
+          cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          break
+        case 'orderNumber':
+          cmp = (a.orderNumber || '').localeCompare(b.orderNumber || '')
+          break
+        case 'customer':
+          cmp = (a.customer?.name || '').localeCompare(b.customer?.name || '')
+          break
+        case 'status':
+          cmp = (a.status || '').localeCompare(b.status || '')
+          break
+        case 'total':
+          cmp = a.totalAmount - b.totalAmount
+          break
+        default:
+          break
+      }
+      return mult * cmp
+    })
+    // Keep drafts at the top; don't send them to the bottom
+    const isDraft = (o: Order) => (o.status || '').toLowerCase() === 'draft'
+    const drafts = list.filter(isDraft)
+    const nonDrafts = list.filter((o) => !isDraft(o))
+    return [...drafts, ...nonDrafts]
+  }, [filteredOrders, sortBy, sortDir])
 
   const fetchOrders = async () => {
     setLoading(true)
@@ -206,15 +248,40 @@ export default function OrdersPage() {
       </div>
       
           
-      {/* Search Bar */}
-      <div className="relative">
-        <Input
-          type="text"
-          placeholder="Search orders by number, customer, or status..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full"
-        />
+      {/* Search and sort */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Input
+            type="text"
+            placeholder="Search orders by number, customer, or status..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full"
+          />
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date">Date</SelectItem>
+              <SelectItem value="orderNumber">Order #</SelectItem>
+              <SelectItem value="customer">Customer</SelectItem>
+              <SelectItem value="status">Status</SelectItem>
+              <SelectItem value="total">Total</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={sortDir} onValueChange={(v) => setSortDir(v as 'asc' | 'desc')}>
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="Order" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="asc">Ascending</SelectItem>
+              <SelectItem value="desc">Descending</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Orders Grid */}
@@ -224,7 +291,7 @@ export default function OrdersPage() {
         transition={{ delay: 0.2 }}
         className="grid gap-4"
       >
-        {filteredOrders.map((order, index) => (
+        {sortedOrders.map((order, index) => (
           <motion.div
             key={order.id}
             initial={{ opacity: 0, y: 20 }}
@@ -282,7 +349,7 @@ export default function OrdersPage() {
         ))}
       </motion.div>
 
-      {filteredOrders.length === 0 && (
+      {sortedOrders.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
