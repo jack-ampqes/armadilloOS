@@ -113,7 +113,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json(updatedUser)
+    const body =
+      process.env.NODE_ENV === 'development'
+        ? { ...updatedUser, _dev: { usingServiceRole: !!process.env.SUPABASE_SERVICE_ROLE_KEY } }
+        : updatedUser
+    return NextResponse.json(body)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'An error occurred while uploading'
     console.error('Avatar upload error:', error)

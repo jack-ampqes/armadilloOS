@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
-import { User, Edit2, Save, X, Camera } from 'lucide-react'
+import { User, Edit2, Save, X, Camera, Loader2 } from 'lucide-react'
 
 interface UserProfile {
   id: string
@@ -372,7 +372,7 @@ function ProfilePageContent() {
                   />
                   {avatarUploading ? (
                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                      <span className="text-white text-xs">Uploading…</span>
+                      <Loader2 className="w-6 h-6 text-white animate-spin" />
                     </div>
                   ) : (
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-center justify-center transition-colors">
@@ -380,7 +380,6 @@ function ProfilePageContent() {
                     </div>
                   )}
                 </button>
-                <p className="text-white/40 text-xs">Click to change</p>
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-white">
