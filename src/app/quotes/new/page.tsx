@@ -16,6 +16,8 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { usePermissions } from '@/lib/usePermissions'
+import { hasPermission as hasPermissionForRole } from '@/lib/permissions'
+import type { Role } from '@/lib/permissions'
 
 interface Product {
   id: string
@@ -91,14 +93,17 @@ export default function NewQuotePage() {
   const [customItemPrice, setCustomItemPrice] = useState('')
   const [customItemQty, setCustomItemQty] = useState('1')
 
+  // Fetch products once on mount (no re-run on role/hasPermission identity change)
   useEffect(() => {
-    // Only redirect once we know the role; while role is null (cookie not read yet) stay on page
-    if (role !== null && !hasPermission('Quoting')) {
-      router.push('/quotes')
-      return
-    }
     fetchProducts()
-  }, [role, hasPermission])
+  }, [])
+
+  // Redirect non-Quoting users once role is known
+  useEffect(() => {
+    if (role !== null && !hasPermissionForRole(role as Role, 'Quoting')) {
+      router.push('/quotes')
+    }
+  }, [role, router])
 
   const searchQuickBooksCustomers = useCallback(async () => {
     const q = customerSearchQuery.trim()

@@ -10,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePermissions } from '@/lib/usePermissions'
+import { hasPermission as hasPermissionForRole } from '@/lib/permissions'
+import type { Role } from '@/lib/permissions'
 
 interface Product {
   id: string
@@ -100,15 +102,19 @@ export default function EditQuotePage({ params }: { params: Promise<{ id: string
   const [customItemPrice, setCustomItemPrice] = useState('')
   const [customItemQty, setCustomItemQty] = useState('1')
 
+  // Fetch products once on mount (avoids "Loading products..." flash from re-running)
   useEffect(() => {
-    // Only redirect once we know the role; while role is null (cookie not read yet) stay on page
-    if (role !== null && !hasPermission('Quoting')) {
+    fetchProducts()
+  }, [])
+
+  // Load quote when id is set; redirect non-Quoting users once role is known
+  useEffect(() => {
+    if (role !== null && !hasPermissionForRole(role as Role, 'Quoting')) {
       router.push(`/quotes/${id}`)
       return
     }
-    fetchProducts()
     fetchQuote()
-  }, [id, role, hasPermission])
+  }, [id, role, router])
 
   const fetchQuote = async () => {
     setLoadingQuote(true)
