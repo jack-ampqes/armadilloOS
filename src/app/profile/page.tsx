@@ -1,13 +1,24 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
+import Cropper from 'react-easy-crop'
+import type { Area } from 'react-easy-crop'
+import 'react-easy-crop/react-easy-crop.css'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { getCroppedImg } from '@/lib/crop-image'
 import { User, Edit2, Save, X, Camera, Loader2 } from 'lucide-react'
 
 interface UserProfile {
@@ -63,6 +74,12 @@ function ProfilePageContent() {
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState('')
   const avatarInputRef = useRef<HTMLInputElement>(null)
+  const [cropperOpen, setCropperOpen] = useState(false)
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null)
+  const [fileToCrop, setFileToCrop] = useState<File | null>(null)
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
+  const [crop, setCrop] = useState({ x: 0, y: 0 })
+  const [zoom, setZoom] = useState(1)
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
@@ -253,18 +270,49 @@ function ProfilePageContent() {
     avatarInputRef.current?.click()
   }
 
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setAvatarError('')
+    setCroppedAreaPixels(null)
+    setCrop({ x: 0, y: 0 })
+    setZoom(1)
+    setFileToCrop(file)
+    setCropImageSrc(URL.createObjectURL(file))
+    setCropperOpen(true)
+    e.target.value = ''
+  }
+
+  const onCropComplete = useCallback((_: Area, pixels: Area) => {
+    setCroppedAreaPixels(pixels)
+  }, [])
+
+  const onCropAreaChange = useCallback((_: Area, pixels: Area) => {
+    setCroppedAreaPixels(pixels)
+  }, [])
+
+  const handleCropCancel = useCallback(() => {
+    if (cropImageSrc) URL.revokeObjectURL(cropImageSrc)
+    setCropperOpen(false)
+    setCropImageSrc(null)
+    setFileToCrop(null)
+    setCroppedAreaPixels(null)
+  }, [cropImageSrc])
+
+  const handleCropConfirm = async () => {
+    if (!cropImageSrc || !fileToCrop || !croppedAreaPixels) return
     setAvatarUploading(true)
     try {
+      const blob = await getCroppedImg(cropImageSrc, croppedAreaPixels)
       const token = localStorage.getItem('auth_token')
       const userEmail = localStorage.getItem('user_email')
       if (!token || !userEmail) {
         setAvatarError('Please log in again.')
         return
       }
+      const file = new File([blob], fileToCrop.name.replace(/\.[^.]+$/, '.jpg') || 'avatar.jpg', {
+        type: 'image/jpeg',
+      })
       const formData = new FormData()
       formData.append('avatar', file)
       const response = await fetch('/api/profile/avatar', {
@@ -281,11 +329,11 @@ function ProfilePageContent() {
         return
       }
       setProfile(data)
+      handleCropCancel()
     } catch {
-      setAvatarError('Failed to upload picture')
+      setAvatarError('Failed to crop or upload picture')
     } finally {
       setAvatarUploading(false)
-      e.target.value = ''
     }
   }
 
@@ -338,6 +386,69 @@ function ProfilePageContent() {
 
   return (
     <div className="min-h-screen bg-[#181818] flex items-start justify-start p-6 lg:pl-[10%]">
+      <Dialog open={cropperOpen} onOpenChange={(open) => !open && handleCropCancel()}>
+        <DialogContent className="max-w-lg bg-[#1f1f1f] border-white/20 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Crop your profile picture</DialogTitle>
+          </DialogHeader>
+          <div className="relative h-[min(70vmin,360px)] w-full bg-black/40 rounded-lg overflow-hidden">
+            {cropImageSrc && (
+              <Cropper
+                image={cropImageSrc}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                cropShape="round"
+                showGrid={false}
+                minZoom={1}
+                maxZoom={3}
+                zoomSpeed={1}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={onCropComplete}
+                onCropAreaChange={onCropAreaChange}
+                style={{
+                  containerStyle: { backgroundColor: 'transparent' },
+                  cropAreaStyle: { border: '2px solid rgba(255,255,255,0.6)' },
+                }}
+                classes={{ containerClassName: 'bg-transparent' }}
+                restrictPosition={true}
+                mediaProps={{}}
+                cropperProps={{}}
+                rotation={0}
+                roundCropAreaPixels={true}
+                keyboardStep={0.5}
+              />
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCropCancel}
+              className="border-white/20 text-white hover:bg-white/10"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCropConfirm}
+              disabled={avatarUploading || !croppedAreaPixels}
+              className="bg-white text-[#181818] hover:bg-white/90"
+            >
+              {avatarUploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Uploading…
+                </>
+              ) : (
+                'Use photo'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="max-w-2xl w-full">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-white mb-2">Profile</h1>
