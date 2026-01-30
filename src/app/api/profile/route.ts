@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     // Query user from Supabase (use admin client to bypass RLS)
     const { data: user, error } = await supabaseAdmin
       .from('users')
-      .select('id, email, name, role, created_at, updated_at')
+      .select('id, email, name, role, avatar_url, created_at, updated_at')
       .eq('email', userEmail.toLowerCase().trim())
       .single()
 
@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
           ...basicUser,
           name: null,
           role: auth.user.role,
+          avatar_url: null,
         })
       }
       
@@ -77,7 +78,7 @@ export async function PUT(request: NextRequest) {
 
     const userEmail = auth.user.email
 
-    const { name, email } = await request.json()
+    const { name, email, avatar_url } = await request.json()
 
     // Validate email format if provided
     if (email) {
@@ -107,19 +108,38 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update user
-    const updateData: { name?: string; email?: string; updated_at?: string } = {}
+    const updateData: { name?: string; email?: string; avatar_url?: string | null; updated_at?: string } = {}
     if (name !== undefined) updateData.name = name || null
     if (email !== undefined) updateData.email = email.toLowerCase().trim()
+    if (avatar_url !== undefined) updateData.avatar_url = avatar_url || null
     updateData.updated_at = new Date().toISOString()
 
     const { data: updatedUser, error } = await supabaseAdmin
       .from('users')
       .update(updateData)
       .eq('email', userEmail.toLowerCase().trim())
-      .select('id, email, name, role, created_at, updated_at')
+      .select('id, email, name, role, avatar_url, created_at, updated_at')
       .single()
 
     if (error) {
+      // If avatar_url column doesn't exist, retry without it
+      if (avatar_url !== undefined && (error.message?.includes('avatar_url') || error.code === '42703')) {
+        const { avatar_url: _a, ...updateWithoutAvatar } = updateData
+        const { data: fallbackUser, error: fallbackError } = await supabaseAdmin
+          .from('users')
+          .update(updateWithoutAvatar)
+          .eq('email', userEmail.toLowerCase().trim())
+          .select('id, email, name, role, created_at, updated_at')
+          .single()
+        if (fallbackError) {
+          console.error('Profile update error:', fallbackError)
+          return NextResponse.json(
+            { error: 'Failed to update profile' },
+            { status: 500 }
+          )
+        }
+        return NextResponse.json({ ...fallbackUser, avatar_url: null })
+      }
       console.error('Profile update error:', error)
       return NextResponse.json(
         { error: 'Failed to update profile' },

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
@@ -8,13 +8,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
-import { User, Edit2, Save, X } from 'lucide-react'
+import { User, Edit2, Save, X, Camera } from 'lucide-react'
 
 interface UserProfile {
   id: string
   email: string
   name: string | null
   role: string
+  avatar_url?: string | null
   created_at: string
   updated_at: string
 }
@@ -59,6 +60,9 @@ function ProfilePageContent() {
     Array<{ id?: string; name?: string; type?: string; subType?: string }> | null
   >(null)
   const [quickbooksVerifyError, setQuickbooksVerifyError] = useState('')
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const [avatarError, setAvatarError] = useState('')
+  const avatarInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
@@ -244,6 +248,47 @@ function ProfilePageContent() {
     }
   }
 
+  const handleAvatarClick = () => {
+    setAvatarError('')
+    avatarInputRef.current?.click()
+  }
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAvatarError('')
+    setAvatarUploading(true)
+    try {
+      const token = localStorage.getItem('auth_token')
+      const userEmail = localStorage.getItem('user_email')
+      if (!token || !userEmail) {
+        setAvatarError('Please log in again.')
+        return
+      }
+      const formData = new FormData()
+      formData.append('avatar', file)
+      const response = await fetch('/api/profile/avatar', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-User-Email': userEmail,
+        },
+        body: formData,
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setAvatarError(data.error || 'Failed to upload picture')
+        return
+      }
+      setProfile(data)
+    } catch {
+      setAvatarError('Failed to upload picture')
+    } finally {
+      setAvatarUploading(false)
+      e.target.value = ''
+    }
+  }
+
   const handleCancel = () => {
     if (profile) {
       setFormData({
@@ -302,14 +347,40 @@ function ProfilePageContent() {
         <Card className="bg-[#1f1f1f] border-white/20 p-6">
           <div className="flex items-start justify-between mb-6">
             <div className="flex items-center space-x-4">
-              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
-                <Image 
-                  src="/armadilloProfile.png" 
-                  alt="Profile" 
-                  width={64}
-                  height={64}
-                  className="object-contain"
-                />
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleAvatarClick}
+                  disabled={avatarUploading}
+                  className="relative w-16 h-16 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-2 ring-transparent hover:ring-white/30 focus:ring-white/50 focus:outline-none transition-all disabled:opacity-70 disabled:pointer-events-none group"
+                  aria-label="Change profile picture"
+                >
+                  <Image
+                    src={profile.avatar_url || '/armadilloProfile.png'}
+                    alt="Profile"
+                    width={64}
+                    height={64}
+                    className="object-cover w-full h-full"
+                    unoptimized={!!profile.avatar_url}
+                  />
+                  {avatarUploading ? (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                      <span className="text-white text-xs">Uploading…</span>
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-center justify-center transition-colors">
+                      <Camera className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  )}
+                </button>
+                <p className="text-white/40 text-xs">Click to change</p>
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-white">
@@ -323,15 +394,15 @@ function ProfilePageContent() {
             </Badge>
           </div>
 
-          {error && (
+          {(error || avatarError) && (
             <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
-              <p className="text-red-400 text-sm">{error}</p>
+              <p className="text-red-400 text-sm">{error || avatarError}</p>
             </div>
           )}
 
           <div className="space-y-4">
             <div>
-              <Label htmlFor="name" className="text-white">
+              <Label htmlFor={editing ? 'name' : undefined} className="text-white">
                 Name
               </Label>
               {editing ? (
@@ -350,7 +421,7 @@ function ProfilePageContent() {
             </div>
 
             <div>
-              <Label htmlFor="email" className="text-white">
+              <Label htmlFor={editing ? 'email' : undefined} className="text-white">
                 Email
               </Label>
               {editing ? (
