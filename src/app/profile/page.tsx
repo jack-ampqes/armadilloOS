@@ -363,7 +363,11 @@ function ProfilePageContent() {
                   aria-label="Change profile picture"
                 >
                   <Image
-                    src={profile.avatar_url || '/armadilloProfile.png'}
+                    src={
+                      profile.avatar_url
+                        ? `${profile.avatar_url}${profile.avatar_url.includes('?') ? '&' : '?'}t=${profile.updated_at || ''}`
+                        : '/armadilloProfile.png'
+                    }
                     alt="Profile"
                     width={64}
                     height={64}

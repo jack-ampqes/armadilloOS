@@ -52,9 +52,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const safeExt = ['jpeg', 'jpg', 'png', 'gif', 'webp'].includes(ext) ? ext : 'jpg'
-    const path = `${user.id}/avatar.${safeExt}`
+    // Fixed path so every upload replaces the same object (no avatar.jpg vs avatar.png)
+    const path = `${user.id}/avatar`
 
     const buffer = Buffer.from(await file.arrayBuffer())
 
