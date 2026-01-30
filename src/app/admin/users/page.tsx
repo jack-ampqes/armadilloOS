@@ -55,14 +55,16 @@ export default function AdminUsersPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const isAdmin = role === 'Admin'
+  const roleKnown = role !== null
 
   useEffect(() => {
+    if (!roleKnown) return
     if (!isAdmin) {
       router.replace('/')
       return
     }
     fetchUsers()
-  }, [isAdmin, router])
+  }, [roleKnown, isAdmin, router])
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -104,6 +106,15 @@ export default function AdminUsersPage() {
     } finally {
       setSavingId(null)
     }
+  }
+
+  // Wait for role to load from cookie before deciding; avoid redirecting admins on first paint
+  if (!roleKnown) {
+    return (
+      <div className="flex max-w-7xl items-center justify-center py-24">
+        <Loader2 className="h-10 w-10 animate-spin text-white/60" />
+      </div>
+    )
   }
 
   if (!isAdmin) {
