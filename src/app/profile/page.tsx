@@ -19,7 +19,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { getCroppedImg } from '@/lib/crop-image'
-import { User, Edit2, Save, X, Camera, Loader2 } from 'lucide-react'
+import { User, Edit2, Save, X, Camera, Loader2, ChevronDown } from 'lucide-react'
 
 interface UserProfile {
   id: string
@@ -80,6 +80,8 @@ function ProfilePageContent() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
   const [crop, setCrop] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
+  const [shopifyOpen, setShopifyOpen] = useState(false)
+  const [quickbooksOpen, setQuickbooksOpen] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
@@ -585,112 +587,127 @@ function ProfilePageContent() {
           {/* Shopify / QuickBooks — Admin only */}
           {profile.role === 'Admin' && (
             <>
-              <div className="mt-6 pt-6 border-t border-white/10 space-y-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-white font-semibold">Shopify</h3>
-                    <p className="text-white/60 text-sm">
-                      Connect your store to track orders in armadilloOS.
-                    </p>
+              <div className="mt-6 pt-6 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShopifyOpen((o) => !o)}
+                  className="flex w-full items-center justify-between gap-4 rounded-md py-1 text-left hover:bg-white/5 transition-colors"
+                  aria-expanded={shopifyOpen}
+                >
+                  <div className="flex items-center gap-2">
+                    <ChevronDown
+                      className={`h-5 w-5 text-white/60 shrink-0 transition-transform ${shopifyOpen ? '' : '-rotate-90'}`}
+                    />
+                    <div>
+                      <h3 className="text-white font-semibold">Shopify</h3>
+
+                    </div>
                   </div>
                   <Badge variant={shopifyStatus?.connected ? 'success' : 'secondary'}>
                     {shopifyStatus?.connected ? 'Connected' : 'Not connected'}
                   </Badge>
-                </div>
-
-                <div>
-                  <Label htmlFor="shopDomain" className="text-white">
-                    Shop domain
-                  </Label>
-                  <Input
-                    id="shopDomain"
-                    value={shopDomain}
-                    onChange={(e) => setShopDomain(e.target.value)}
-                    className="bg-white/10 border-white/20 text-white mt-1"
-                    placeholder='your-store.myshopify.com'
-                  />
-                  {shopifyStatus?.connected && shopifyStatus.shop && (
-                    <p className="text-white/40 text-xs mt-2">
-                      Connected to <span className="text-white/70">{shopifyStatus.shop}</span>
-                      {shopifyStatus.source ? ` (via ${shopifyStatus.source})` : ''}
-                    </p>
-                  )}
-                  {shopifyError && (
-                    <p className="text-red-400 text-xs mt-2">{shopifyError}</p>
-                  )}
-                </div>
-
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    onClick={handleConnectShopify}
-                    className="bg-white text-[#181818] hover:bg-white/90"
-                  >
-                    Connect Shopify
-                  </Button>
-                </div>
+                </button>
+                {shopifyOpen && (
+                  <div className="mt-4 space-y-4 pl-7">
+                    <div>
+                      <Label htmlFor="shopDomain" className="text-white">
+                        Shop domain
+                      </Label>
+                      <Input
+                        id="shopDomain"
+                        value={shopDomain}
+                        onChange={(e) => setShopDomain(e.target.value)}
+                        className="bg-white/10 border-white/20 text-white mt-1"
+                        placeholder='your-store.myshopify.com'
+                      />
+                      {shopifyStatus?.connected && shopifyStatus.shop && (
+                        <p className="text-white/40 text-xs mt-2">
+                          Connected to <span className="text-white/70">{shopifyStatus.shop}</span>
+                          {shopifyStatus.source ? ` (via ${shopifyStatus.source})` : ''}
+                        </p>
+                      )}
+                      {shopifyError && (
+                        <p className="text-red-400 text-xs mt-2">{shopifyError}</p>
+                      )}
+                    </div>
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        onClick={handleConnectShopify}
+                        className="bg-white text-[#181818] hover:bg-white/90"
+                      >
+                        Connect Shopify
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="mt-6 pt-6 border-t border-white/10 space-y-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-white font-semibold">QuickBooks</h3>
-                    <p className="text-white/60 text-sm">
-                      Connect QuickBooks Online to sync estimates and invoices.
-                    </p>
+              <div className="mt-6 pt-6 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setQuickbooksOpen((o) => !o)}
+                  className="flex w-full items-center justify-between gap-4 rounded-md py-1 text-left hover:bg-white/5 transition-colors"
+                  aria-expanded={quickbooksOpen}
+                >
+                  <div className="flex items-center gap-2">
+                    <ChevronDown
+                      className={`h-5 w-5 text-white/60 shrink-0 transition-transform ${quickbooksOpen ? '' : '-rotate-90'}`}
+                    />
+                    <div>
+                      <h3 className="text-white font-semibold">QuickBooks</h3>
+                    </div>
                   </div>
                   <Badge variant={quickbooksStatus?.connected ? 'success' : 'secondary'}>
                     {quickbooksStatus?.connected ? 'Connected' : 'Not connected'}
                   </Badge>
-                </div>
-                {quickbooksStatus?.connected && quickbooksStatus.realmId && (
-                  <p className="text-white/40 text-xs">
-                    Company ID: <span className="text-white/70">{quickbooksStatus.realmId}</span>
-                    {quickbooksStatus.source ? ` (via ${quickbooksStatus.source})` : ''}
-                  </p>
-                )}
-                {quickbooksError && (
-                  <p className="text-red-400 text-xs">{quickbooksError}</p>
-                )}
-                {quickbooksStatus?.connected && (
-                  <>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleVerifyQuickBooks}
-                      disabled={quickbooksVerifyLoading}
-                      className="border-white/20 text-white hover:bg-white/10"
-                    >
-                      {quickbooksVerifyLoading ? 'Verifying...' : 'Verify connection'}
-                    </Button>
-                    {quickbooksVerifyError && (
-                      <p className="text-red-400 text-xs">{quickbooksVerifyError}</p>
+                </button>
+                {quickbooksOpen && (
+                  <div className="mt-4 space-y-4 pl-7">
+                    {quickbooksError && (
+                      <p className="text-red-400 text-xs">{quickbooksError}</p>
                     )}
-                    {quickbooksAccounts && (
-                      <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                        <p className="text-white/80 text-sm font-medium mb-2">
-                          Connected and verified — chart of accounts (first 5):
-                        </p>
-                        <ul className="text-white/60 text-xs space-y-1">
-                          {quickbooksAccounts.map((a, i) => (
-                            <li key={a.id ?? i}>
-                              {a.name ?? '—'} {a.type ? `(${a.type})` : ''}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                    {quickbooksStatus?.connected && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleVerifyQuickBooks}
+                          disabled={quickbooksVerifyLoading}
+                          className="border-white/20 text-white hover:bg-white/10"
+                        >
+                          {quickbooksVerifyLoading ? 'Verifying...' : 'Verify connection'}
+                        </Button>
+                        {quickbooksVerifyError && (
+                          <p className="text-red-400 text-xs">{quickbooksVerifyError}</p>
+                        )}
+                        {quickbooksAccounts && (
+                          <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                            <p className="text-white/80 text-sm font-medium mb-2">
+                              Connected and verified — chart of accounts (first 5):
+                            </p>
+                            <ul className="text-white/60 text-xs space-y-1">
+                              {quickbooksAccounts.map((a, i) => (
+                                <li key={a.id ?? i}>
+                                  {a.name ?? '—'} {a.type ? `(${a.type})` : ''}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </>
                     )}
-                  </>
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        onClick={handleConnectQuickBooks}
+                        className="bg-white text-[#181818] hover:bg-white/90"
+                      >
+                        Connect QuickBooks
+                      </Button>
+                    </div>
+                  </div>
                 )}
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    onClick={handleConnectQuickBooks}
-                    className="bg-white text-[#181818] hover:bg-white/90"
-                  >
-                    Connect QuickBooks
-                  </Button>
-                </div>
               </div>
             </>
           )}
