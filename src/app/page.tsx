@@ -19,6 +19,8 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react"
+import { usePermissions } from '@/lib/usePermissions'
+import type { Role } from '@/lib/permissions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RevenueChart } from '@/components/charts/RevenueChart'
@@ -125,50 +127,29 @@ export default function Dashboard() {
     }
   }
 
-  const sections = [
-    {
-      title: "Orders",
-      description: "Create, view, and process customer orders",
-      href: "/orders",
-      icon: ShoppingCart
-    },
-    {
-      title: "Quotes",
-      description: "Create and manage customer quotes",
-      href: "/quotes",
-      icon: FileText
-    },
-    {
-      title: "Inventory",
-      description: "Track and manage product inventory",
-      href: "/inventory",
-      icon: CirclePile
-    },
-    {
-      title: "Customers",
-      description: "Manage customer information and contacts",
-      href: "/customers",
-      icon: Handshake
-    },
-    {
-      title: "Sales Reps",
-      description: "Manage sales representatives",
-      href: "/sales-reps",
-      icon: Tags
-    },
-    {
-      title: "Distributors",
-      description: "Manage distributors and partnerships",
-      href: "/distributors",
-      icon: Warehouse
-    },
-    {
-      title: "Reports",
-      description: "View sales, inventory, and quote reports",
-      href: "/reports/sales",
-      icon: TrendingUp
-    },
+  const allSections = [
+    { title: "Orders", description: "Create, view, and process customer orders", href: "/orders", icon: ShoppingCart },
+    { title: "Quotes", description: "Create and manage customer quotes", href: "/quotes", icon: FileText },
+    { title: "Inventory", description: "Track and manage product inventory", href: "/inventory", icon: CirclePile },
+    { title: "Customers", description: "Manage customer information and contacts", href: "/customers", icon: Handshake },
+    { title: "Sales Reps", description: "Manage sales representatives", href: "/sales-reps", icon: Tags },
+    { title: "Distributors", description: "Manage distributors and partnerships", href: "/distributors", icon: Warehouse },
+    { title: "Reports", description: "View sales, inventory, and quote reports", href: "/reports/sales", icon: TrendingUp },
+    { title: "Alerts", description: "View and manage system alerts", href: "/alerts", icon: AlertTriangle },
   ]
+
+  /** Dashboard section hrefs allowed per role. Admin sees all. */
+  const DASHBOARD_SECTIONS_BY_ROLE: Record<Role, Set<string>> = {
+    Admin: new Set(allSections.map((s) => s.href)),
+    'Sales Rep': new Set(['/quotes', '/inventory', '/alerts']),
+    Distributor: new Set(['/quotes', '/inventory', '/alerts']),
+    Technician: new Set(['/inventory', '/alerts']),
+  }
+
+  const { role } = usePermissions()
+  const sections = role
+    ? allSections.filter((s) => DASHBOARD_SECTIONS_BY_ROLE[role]?.has(s.href))
+    : []
 
   return (
     <div className="space-y-8 max-w-7xl">
@@ -192,7 +173,8 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Analytics Card */}
+      {/* Analytics Card (Admin only) */}
+      {role === 'Admin' && (
       <div className="space-y-6">
         <div className="relative border border-white/20 rounded-lg overflow-hidden bg-[#181818] transition-all duration-500 ease-in-out">
           <button
@@ -491,6 +473,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Sections List */}
       <div className="space-y-6">
