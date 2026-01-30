@@ -518,39 +518,6 @@ export default function NewQuotePage() {
               <div className="flex flex-wrap gap-2 mt-3">
                 <Button
                   type="button"
-                  variant={searchQuery === 'ArmaFlex' && !activeFilter ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => {
-                    setActiveFilter(null)
-                    setSearchQuery(searchQuery === 'ArmaFlex' ? '' : 'ArmaFlex')
-                  }}
-                >
-                  ArmaFlex
-                </Button>
-                <Button
-                  type="button"
-                  variant={searchQuery === 'Rubber' && !activeFilter ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => {
-                    setActiveFilter(null)
-                    setSearchQuery(searchQuery === 'Rubber' ? '' : 'Rubber')
-                  }}
-                >
-                  Rubber
-                </Button>
-                <Button
-                  type="button"
-                  variant={searchQuery === 'Leather' && !activeFilter ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => {
-                    setActiveFilter(null)
-                    setSearchQuery(searchQuery === 'Leather' ? '' : 'Leather')
-                  }}
-                >
-                  Leather
-                </Button>
-                <Button
-                  type="button"
                   variant={activeFilter === 'Class 2' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => {
