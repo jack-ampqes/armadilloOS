@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { usePermissions } from '@/lib/usePermissions'
 
 interface Product {
   id: string
@@ -29,6 +30,7 @@ export default function ProductDetailPage() {
   const router = useRouter()
   const params = useParams()
   const productId = params.id as string
+  const { hasPermission } = usePermissions()
 
   const [loading, setLoading] = useState(true)
   const [product, setProduct] = useState<Product | null>(null)
@@ -132,12 +134,14 @@ export default function ProductDetailPage() {
               Product Details
             </p>
           </div>
-          <Button asChild>
-            <Link href={`/inventory/${product.id}/edit`}>
-              <Pencil className="mr-2 h-4 w-4" />
-              Edit Product
-            </Link>
-          </Button>
+          {hasPermission('InventoryEditing') && (
+            <Button asChild>
+              <Link href={`/inventory/${product.id}/edit`}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit Product
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 

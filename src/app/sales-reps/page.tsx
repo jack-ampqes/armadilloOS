@@ -220,7 +220,7 @@ export default function SalesRepsPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] min-h-[400px] w-full max-w-[100vw] overflow-hidden -m-8">
-      <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 px-6 py-6 border-b border-white/10">
+      <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 px-6 py-6 border-1 border-white/10">
         <div>
           <h1 className="text-3xl font-bold text-white">Sales Reps & Regions</h1>
           <p className="mt-2 text-white/60 text-sm">

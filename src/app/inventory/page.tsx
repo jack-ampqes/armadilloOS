@@ -546,14 +546,18 @@ export default function InventoryPage() {
                           ${(product.price ?? 0).toFixed(2)}
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          <Link
-                            href={`/inventory/${product.id}/edit`}
-                            className="text-white hover:text-white/60"
-                            title="Edit product"
-                          >
-                            <Pencil className="h-5 w-5" aria-hidden="true" />
-                            <span className="sr-only">Edit</span>
-                          </Link>
+                          {hasPermission('InventoryEditing') ? (
+                            <Link
+                              href={`/inventory/${product.id}/edit`}
+                              className="text-white hover:text-white/60"
+                              title="Edit product"
+                            >
+                              <Pencil className="h-5 w-5" aria-hidden="true" />
+                              <span className="sr-only">Edit</span>
+                            </Link>
+                          ) : (
+                            <span className="text-white/30" aria-hidden>—</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     )
@@ -590,7 +594,7 @@ export default function InventoryPage() {
               <p className="text-sm mt-2">
                 {filter === 'all' ? 'Get started by adding your first product.' : 'Try a different filter.'}
               </p>
-              {filter === 'all' && (
+              {filter === 'all' && hasPermission('InventoryEditing') && (
                 <Button asChild className="mt-4">
                   <Link href="/inventory/new" title="Add Product">
                     <Plus className="h-5 w-5" aria-hidden="true" />
