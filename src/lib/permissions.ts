@@ -105,7 +105,7 @@ export function normalizeRole(rawRole: string | null | undefined): Role {
   if (lower === 'tech' || lower === 'technician') {
     return 'Technician'
   }
-  if (lower === 'admin') {
+  if (lower === 'admin' || lower === 'administrator' || lower.startsWith('admin')) {
     return 'Admin'
   }
 

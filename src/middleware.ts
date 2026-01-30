@@ -23,10 +23,11 @@ function getRoleFromRequest(request: NextRequest): Role | null {
 
 /** Route protection: only allow paths the role is permitted to access. */
 function isPathAllowedForRole(pathname: string, role: Role | null): boolean {
-  if (!role) return false
-
   // Admin can access everything
   if (role === 'Admin') return true
+
+  // Unknown role (e.g. user_info cookie missing): allow through; page/API will enforce
+  if (!role) return true
 
   // Admin-only routes
   if (pathname.startsWith('/admin')) return false
