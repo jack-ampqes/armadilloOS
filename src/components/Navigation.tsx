@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button'
 import { SyncedGif } from '@/components/SyncedGif'
 import { useState, useEffect, useRef } from 'react'
 import { usePermissions } from '@/lib/usePermissions'
+import type { Role } from '@/lib/permissions'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
@@ -38,6 +39,19 @@ const navigation = [
   { name: 'Users', href: '/admin/users', icon: ShieldUser },
 ]
 
+/** Sidebar nav items allowed per role. Others are hidden and routes are protected in middleware. */
+const ALLOWED_NAV_BY_ROLE: Record<Role, Set<string>> = {
+  Admin: new Set(navigation.map((n) => n.href)),
+  'Sales Rep': new Set(['/', '/quotes', '/inventory', '/alerts']),
+  Distributor: new Set(['/', '/quotes', '/inventory', '/alerts']),
+  Technician: new Set(['/', '/inventory', '/alerts']),
+}
+
+function canShowNavItem(href: string, role: Role | null): boolean {
+  if (!role) return false
+  return ALLOWED_NAV_BY_ROLE[role]?.has(href) ?? false
+}
+
 interface Alert {
   read: boolean
 }
@@ -50,7 +64,7 @@ export default function Navigation() {
   const [unreadAlertsCount, setUnreadAlertsCount] = useState(0)
   const mobileSignOutRef = useRef<HTMLDivElement>(null)
   const desktopSignOutRef = useRef<HTMLDivElement>(null)
-  const { hasPermission, role } = usePermissions()
+  const { role } = usePermissions()
 
   const handleSignOut = async () => {
     try {
@@ -211,22 +225,7 @@ export default function Navigation() {
           {/* Navigation */}
           <nav className="flex-1 px-5">
             {navigation.map((item, index) => {
-              // Permission-based visibility
-              if (item.href === '/orders' && !hasPermission('OrdersViewing')) {
-                return null
-              }
-              if (item.href === '/quotes' && !hasPermission('Quoting')) {
-                return null
-              }
-              if (item.href === '/inventory' && !hasPermission('InventoryViewing')) {
-                return null
-              }
-              if (item.href === '/inventory/codes' && !hasPermission('QrCodesBarcodes')) {
-                return null
-              }
-              if (item.href === '/admin/users' && role !== 'Admin') {
-                return null
-              }
+              if (!canShowNavItem(item.href, role)) return null
 
               const isActive = pathname === item.href
               const isAlerts = item.href === '/alerts'
@@ -288,11 +287,7 @@ export default function Navigation() {
               {/* Navigation */}
               <nav className="flex-1 px-4 space-y-2">
                 {navigation.map((item, index) => {
-                  if (item.href === '/orders' && !hasPermission('OrdersViewing')) return null
-                  if (item.href === '/quotes' && !hasPermission('Quoting')) return null
-                  if (item.href === '/inventory' && !hasPermission('InventoryViewing')) return null
-                  if (item.href === '/inventory/codes' && !hasPermission('QrCodesBarcodes')) return null
-                  if (item.href === '/admin/users' && role !== 'Admin') return null
+                  if (!canShowNavItem(item.href, role)) return null
                   const isActive = pathname === item.href
                   const isAlerts = item.href === '/alerts'
                   const Icon = item.icon

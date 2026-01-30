@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { ShieldUser, Loader2, AlertCircle } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -45,6 +46,7 @@ function permissionsSummary(role: Role): string {
 }
 
 export default function AdminUsersPage() {
+  const router = useRouter()
   const { role } = usePermissions()
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -55,9 +57,12 @@ export default function AdminUsersPage() {
   const isAdmin = role === 'Admin'
 
   useEffect(() => {
-    if (!isAdmin) return
+    if (!isAdmin) {
+      router.replace('/')
+      return
+    }
     fetchUsers()
-  }, [isAdmin])
+  }, [isAdmin, router])
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -108,7 +113,7 @@ export default function AdminUsersPage() {
         <Card className="border-amber-500/50 bg-amber-500/10">
           <CardContent className="p-6">
             <p className="text-amber-400 font-medium">You don’t have permission to view this page.</p>
-            <p className="text-white/70 text-sm mt-1">Only Admins can manage user roles.</p>
+            <p className="text-white/70 text-sm mt-1">Redirecting to dashboard…</p>
           </CardContent>
         </Card>
       </div>
