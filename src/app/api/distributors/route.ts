@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { geocodeAddress } from '@/lib/geocode'
 
 export async function GET() {
   try {
@@ -18,10 +19,6 @@ export async function GET() {
       email: distributor.email,
       phone: distributor.phone,
       address: distributor.address,
-      city: distributor.city,
-      state: distributor.state,
-      zipCode: distributor.zip_code,
-      country: distributor.country,
       discountRate: distributor.discount_rate ? parseFloat(distributor.discount_rate) : null,
       createdAt: distributor.created_at,
       updatedAt: distributor.updated_at
@@ -40,26 +37,44 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, contactName, email, phone, address, city, state, zipCode, country, discountRate } = body
+    const { name, contactName, email, phone, address, discountRate, longitude, latitude } = body
+
+    const insertData: Record<string, unknown> = {
+      name,
+      contact_name: contactName,
+      email,
+      phone,
+      address,
+      discount_rate: discountRate
+    }
+    if (longitude !== undefined) insertData.longitude = Number(longitude)
+    if (latitude !== undefined) insertData.latitude = Number(latitude)
 
     const { data: distributor, error } = await supabase
       .from('distributors')
-      .insert({
-        name,
-        contact_name: contactName,
-        email,
-        phone,
-        address,
-        city,
-        state,
-        zip_code: zipCode,
-        country,
-        discount_rate: discountRate
-      })
+      .insert(insertData)
       .select()
       .single()
 
     if (error) throw error
+
+    // Geocode address → lat/long if not provided
+    const hasCoords = distributor.longitude != null && distributor.latitude != null
+    if (!hasCoords) {
+      const addressStr = distributor.address?.trim()
+      if (addressStr) {
+        const geo = await geocodeAddress(addressStr)
+        if (geo) {
+        await supabase
+          .from('distributors')
+          .update({
+            longitude: Number(geo.longitude),
+            latitude: Number(geo.latitude)
+          })
+          .eq('id', distributor.id)
+        }
+      }
+    }
 
     // Transform to expected format
     const transformedDistributor = {
@@ -69,10 +84,6 @@ export async function POST(request: NextRequest) {
       email: distributor.email,
       phone: distributor.phone,
       address: distributor.address,
-      city: distributor.city,
-      state: distributor.state,
-      zipCode: distributor.zip_code,
-      country: distributor.country,
       discountRate: distributor.discount_rate ? parseFloat(distributor.discount_rate) : null,
       createdAt: distributor.created_at,
       updatedAt: distributor.updated_at

@@ -43,4 +43,35 @@ declare module 'react-simple-maps' {
     onClick?: () => void
   }
   export const Geography: ComponentType<GeographyProps>
+
+  export interface MarkerProps {
+    coordinates: [number, number]  // [longitude, latitude]
+    children?: ReactNode
+    onMouseEnter?: (evt: React.MouseEvent) => void
+    onMouseLeave?: (evt: React.MouseEvent) => void
+    onMouseDown?: (evt: React.MouseEvent) => void
+    onMouseUp?: (evt: React.MouseEvent) => void
+    onFocus?: (evt: React.FocusEvent) => void
+    onBlur?: (evt: React.FocusEvent) => void
+    style?: {
+      default?: Record<string, string>
+      hover?: Record<string, string>
+      pressed?: Record<string, string>
+    }
+    className?: string
+  }
+  export const Marker: ComponentType<MarkerProps>
+
+  export function useMapContext(): {
+    width: number
+    height: number
+    projection: (coords: [number, number]) => [number, number] & { invert?: (point: [number, number]) => [number, number] }
+    path: ((geo: object) => string) & { centroid?: (geo: object) => [number, number] }
+  }
+  export function useZoomPanContext(): {
+    x: number
+    y: number
+    k: number
+    transformString: string
+  }
 }
