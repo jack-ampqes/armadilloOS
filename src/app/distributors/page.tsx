@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useZoomPanContext } from 'react-simple-maps'
 import { Plus, MapPin, Building, RefreshCw } from 'lucide-react'
@@ -163,8 +163,9 @@ function MapContent({
   )
 }
 
-export default function DistributorsPage() {
+function DistributorsPageContent() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [distributors, setDistributors] = useState<DistributorMap[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -175,9 +176,14 @@ export default function DistributorsPage() {
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null)
 
   const forceGeocode = searchParams.get('force_geocode') === '1'
+
   useEffect(() => {
-    fetchDistributors(forceGeocode)
-  }, [forceGeocode])
+    if (!forceGeocode) {
+      router.replace('/distributors?force_geocode=1')
+      return
+    }
+    fetchDistributors(true)
+  }, [forceGeocode, router])
 
   const fetchDistributors = async (forceGeocode = false) => {
     if (forceGeocode) setRefreshing(true)
@@ -403,5 +409,17 @@ export default function DistributorsPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function DistributorsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col h-[calc(100vh-4rem)] min-h-[400px] w-full max-w-[100vw] overflow-hidden -m-8 items-center justify-center">
+        <div className="loader" />
+      </div>
+    }>
+      <DistributorsPageContent />
+    </Suspense>
   )
 }
