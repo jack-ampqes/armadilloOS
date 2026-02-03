@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useImageColors, getColorVariants } from '@/lib/useImageColors'
+import { OrderTrackingTimeline } from '@/components/OrderTrackingTimeline'
 
 interface ManufacturerOrderItem {
   id: string
@@ -998,6 +999,7 @@ export default function ManufacturerOrdersPage() {
                             )}
                           </div>
                         )}
+                        <OrderTrackingTimeline status={order.status} className={order.tracking_number ? 'mt-3' : 'mt-2'} />
 
                         {order.items && order.items.length > 0 && (
                           <div className="pt-2">
@@ -1078,6 +1080,7 @@ export default function ManufacturerOrdersPage() {
                             <span className="font-mono text-sm">{order.tracking_number}</span>
                           </div>
                         )}
+                        <OrderTrackingTimeline status={order.status} className={order.tracking_number ? 'mt-3' : 'mt-2'} />
 
                         {order.items && order.items.length > 0 && (
                           <div className="pt-2">
