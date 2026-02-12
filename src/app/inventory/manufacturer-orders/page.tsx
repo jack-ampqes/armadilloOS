@@ -9,11 +9,12 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useImageColors, getColorVariants } from '@/lib/useImageColors'
+import { getEffectiveTrackingUrl } from '@/lib/tracking'
 import { OrderTrackingTimeline } from '@/components/OrderTrackingTimeline'
+import type { TrackingEvent } from '@/lib/tracking'
 
 interface ManufacturerOrderItem {
   id: string
@@ -39,6 +40,7 @@ interface ManufacturerOrder {
   carrier?: string
   total_amount: number
   items: ManufacturerOrderItem[]
+  inventory_applied_at?: string | null
 }
 
 interface Manufacturer {
@@ -129,6 +131,12 @@ export default function ManufacturerOrdersPage() {
   const [productSearchQuery, setProductSearchQuery] = useState('')
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  // Tracking details (fetched from API for orders with tracking numbers)
+  const [trackingDetails, setTrackingDetails] = useState<Record<string, { events: TrackingEvent[]; origin?: string; destination?: string; status?: string; loading?: boolean }>>({})
+
+  // Loading state for "Add to inventory" button per order
+  const [applyingOrderId, setApplyingOrderId] = useState<string | null>(null)
+
   // Dynamic color theming based on manufacturer logo
   const selectedLogoUrl = selectedManufacturer ? getManufacturerLogo(selectedManufacturer.name) : null
   const { dominant: brandColor, vibrant: vibrantColor } = useImageColors(selectedLogoUrl)
@@ -164,6 +172,38 @@ export default function ManufacturerOrdersPage() {
   useEffect(() => {
     fetchManufacturers()
   }, [])
+
+  // Fetch tracking for all orders with tracking numbers when manufacturer is selected
+  useEffect(() => {
+    const orders = selectedManufacturer?.orders || []
+    const withTracking = orders.filter((o) => o.tracking_number)
+    if (withTracking.length === 0) return
+    withTracking.forEach((order) => fetchTracking(order))
+  }, [selectedManufacturer?.id, selectedManufacturer?.orders])
+
+  const applyOrderToInventory = async (order: ManufacturerOrder) => {
+    setApplyingOrderId(order.id)
+    try {
+      const res = await fetch(`/api/manufacturer-orders/${order.id}/apply-to-inventory`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.applied && selectedManufacturer) {
+        const updated = await fetch(`/api/manufacturers/${selectedManufacturer.id}`)
+        if (updated.ok) {
+          const manufacturer = await updated.json()
+          setSelectedManufacturer(manufacturer)
+        }
+        fetchManufacturers(true)
+      } else if (!res.ok) {
+        alert(data.error || 'Failed to add to inventory')
+      } else if (data.applied === false && data.message) {
+        alert(data.message)
+      }
+    } catch {
+      alert('Failed to add to inventory')
+    } finally {
+      setApplyingOrderId(null)
+    }
+  }
 
   const fetchManufacturers = async (isRefresh = false) => {
     if (isRefresh) {
@@ -409,12 +449,18 @@ export default function ManufacturerOrdersPage() {
 
     setSavingOrder(true)
     try {
+      const trackingUrl = getEffectiveTrackingUrl(
+        null,
+        newOrder.carrier,
+        newOrder.tracking_number
+      )
       const orderData = {
         manufacturer_id: selectedManufacturer.id,
         expected_delivery: newOrder.expected_delivery || null,
         po_number: newOrder.po_number || null,
         notes: newOrder.notes || null,
         tracking_number: newOrder.tracking_number || null,
+        tracking_url: trackingUrl || null,
         carrier: newOrder.carrier || null,
         total_amount: calculateOrderTotal(),
         // If we have ship_date, set status to 'shipped'
@@ -455,30 +501,87 @@ export default function ManufacturerOrdersPage() {
     }
   }
 
-  const getStatusIcon = (status: ManufacturerOrder['status']) => {
-    switch (status) {
-      case 'pending':
+  const fetchTracking = async (order: ManufacturerOrder) => {
+    if (!order.tracking_number) return
+    setTrackingDetails(prev => ({
+      ...prev,
+      [order.id]: { ...prev[order.id], loading: true, events: prev[order.id]?.events || [] }
+    }))
+    try {
+      const res = await fetch('/api/tracking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trackingNumber: order.tracking_number,
+          carrier: order.carrier,
+          trackingUrl: order.tracking_url
+        })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setTrackingDetails(prev => ({
+          ...prev,
+          [order.id]: {
+            events: data.events || [],
+            origin: data.origin,
+            destination: data.destination,
+            status: data.status,
+            loading: false
+          }
+        }))
+      } else {
+        setTrackingDetails(prev => ({
+          ...prev,
+          [order.id]: { events: [], loading: false }
+        }))
+      }
+    } catch {
+      setTrackingDetails(prev => ({
+        ...prev,
+        [order.id]: { events: [], loading: false }
+      }))
+    }
+  }
+
+  type DisplayStatus = 'ordered' | 'shipped' | 'received' | 'cancelled'
+
+  const getDisplayStatus = (order: ManufacturerOrder): DisplayStatus => {
+    if (order.status === 'cancelled') return 'cancelled'
+    const trackingStatus = trackingDetails[order.id]?.status?.toLowerCase()
+    // When we have FedEx tracking data, use it exclusively - only show "received" when FedEx says delivered
+    if (trackingStatus) {
+      if (trackingStatus === 'delivered') return 'received'
+      if (trackingStatus === 'in_transit' || trackingStatus === 'out_for_delivery') return 'shipped'
+      return 'ordered'
+    }
+    // Orders with tracking number but no tracking data yet: don't assume received from order.status
+    if (order.tracking_number) return order.status === 'shipped' ? 'shipped' : 'ordered'
+    // No tracking number - use order status (e.g. non-FedEx carrier)
+    if (order.status === 'delivered') return 'received'
+    if (order.status === 'shipped') return 'shipped'
+    return 'ordered'
+  }
+
+  const getStatusIcon = (displayStatus: DisplayStatus) => {
+    switch (displayStatus) {
+      case 'ordered':
         return <Clock className="h-4 w-4" />
-      case 'confirmed':
-        return <Package className="h-4 w-4" />
       case 'shipped':
         return <Truck className="h-4 w-4" />
-      case 'delivered':
+      case 'received':
         return <CheckCircle className="h-4 w-4" />
       case 'cancelled':
         return <X className="h-4 w-4" />
     }
   }
 
-  const getStatusVariant = (status: ManufacturerOrder['status']): "default" | "secondary" | "outline" | "success" | "warning" | "destructive" => {
-    switch (status) {
-      case 'pending':
+  const getStatusVariant = (displayStatus: DisplayStatus): "default" | "secondary" | "outline" | "success" | "warning" | "destructive" => {
+    switch (displayStatus) {
+      case 'ordered':
         return 'warning'
-      case 'confirmed':
-        return 'default'
       case 'shipped':
         return 'secondary'
-      case 'delivered':
+      case 'received':
         return 'success'
       case 'cancelled':
         return 'destructive'
@@ -500,7 +603,7 @@ export default function ManufacturerOrdersPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[60vh]">
-        <Skeleton className="h-16 w-16 rounded-full" />
+        <Loader2 className="h-8 w-8 animate-spin text-white/60" />
       </div>
     )
   }
@@ -958,17 +1061,34 @@ export default function ManufacturerOrdersPage() {
                   <CardContent className="p-6">
                     <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                       <div className="space-y-3">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-wrap">
                           <h3 
                             className="text-lg font-bold"
                             style={colorVariants ? { color: colorVariants.base } : { color: 'white' }}
                           >
                             {order.order_number}
                           </h3>
-                          <Badge variant={getStatusVariant(order.status)} className="flex items-center gap-1">
-                            {getStatusIcon(order.status)}
-                            {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                          <Badge variant={getStatusVariant(getDisplayStatus(order))} className="flex items-center gap-1">
+                            {getStatusIcon(getDisplayStatus(order))}
+                            {getDisplayStatus(order).charAt(0).toUpperCase() + getDisplayStatus(order).slice(1)}
                           </Badge>
+                          {getDisplayStatus(order) === 'received' && !order.inventory_applied_at && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5"
+                              disabled={applyingOrderId === order.id}
+                              onClick={() => applyOrderToInventory(order)}
+                              style={colorVariants ? { borderColor: colorVariants.border } : undefined}
+                            >
+                              {applyingOrderId === order.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Package className="h-3.5 w-3.5" />
+                              )}
+                              Add to inventory
+                            </Button>
+                          )}
                         </div>
                         
                         <div className="text-sm text-white/60 space-y-1">
@@ -981,25 +1101,36 @@ export default function ManufacturerOrdersPage() {
                         {order.tracking_number && (
                           <div className="flex items-center gap-2">
                             <Truck className="h-4 w-4 text-white/60" />
-                            {order.tracking_url ? (
-                              <a 
-                                href={order.tracking_url} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                              >
-                                {order.tracking_number}
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
-                            ) : (
-                              <span className="text-white font-mono">{order.tracking_number}</span>
-                            )}
+                            {(() => {
+                              const url = getEffectiveTrackingUrl(order.tracking_url, order.carrier, order.tracking_number)
+                              return url ? (
+                                <a 
+                                  href={url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 font-mono hover:opacity-80 transition-opacity"
+                                  style={{ color: colorVariants?.base || '#60a5fa' }}
+                                >
+                                  {order.tracking_number}
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              ) : (
+                                <span className="text-white font-mono">{order.tracking_number}</span>
+                              )
+                            })()}
                             {order.carrier && (
                               <span className="text-white/40 text-sm">({order.carrier})</span>
                             )}
                           </div>
                         )}
-                        <OrderTrackingTimeline status={order.status} className={order.tracking_number ? 'mt-3' : 'mt-2'} />
+                        <OrderTrackingTimeline 
+                          status={order.status} 
+                          events={trackingDetails[order.id]?.events}
+                          origin={trackingDetails[order.id]?.origin}
+                          destination={trackingDetails[order.id]?.destination}
+                          themeColor={colorVariants?.base}
+                          className={order.tracking_number ? 'mt-3' : 'mt-2'} 
+                        />
 
                         {order.items && order.items.length > 0 && (
                           <div className="pt-2">
@@ -1059,12 +1190,29 @@ export default function ManufacturerOrdersPage() {
                   <CardContent className="p-6">
                     <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                       <div className="space-y-3">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-wrap">
                           <h3 className="text-lg font-bold text-white">{order.order_number}</h3>
-                          <Badge variant={getStatusVariant(order.status)} className="flex items-center gap-1">
-                            {getStatusIcon(order.status)}
-                            {order.status === 'delivered' ? 'Delivered' : 'Cancelled'}
+                          <Badge variant={getStatusVariant(getDisplayStatus(order))} className="flex items-center gap-1">
+                            {getStatusIcon(getDisplayStatus(order))}
+                            {getDisplayStatus(order) === 'received' ? 'Received' : 'Cancelled'}
                           </Badge>
+                          {getDisplayStatus(order) === 'received' && !order.inventory_applied_at && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5"
+                              disabled={applyingOrderId === order.id}
+                              onClick={() => applyOrderToInventory(order)}
+                              style={colorVariants ? { borderColor: colorVariants.border } : undefined}
+                            >
+                              {applyingOrderId === order.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Package className="h-3.5 w-3.5" />
+                              )}
+                              Add to inventory
+                            </Button>
+                          )}
                         </div>
                         
                         <div className="text-sm text-white/60 space-y-1">
@@ -1077,10 +1225,36 @@ export default function ManufacturerOrdersPage() {
                         {order.tracking_number && (
                           <div className="flex items-center gap-2 text-white/60">
                             <Truck className="h-4 w-4" />
-                            <span className="font-mono text-sm">{order.tracking_number}</span>
+                            {(() => {
+                              const url = getEffectiveTrackingUrl(order.tracking_url, order.carrier, order.tracking_number)
+                              return url ? (
+                                <a 
+                                  href={url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 font-mono text-sm hover:opacity-80 transition-opacity"
+                                  style={{ color: colorVariants?.base || '#60a5fa' }}
+                                >
+                                  {order.tracking_number}
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              ) : (
+                                <span className="font-mono text-sm">{order.tracking_number}</span>
+                              )
+                            })()}
+                            {order.carrier && (
+                              <span className="text-white/40 text-sm">({order.carrier})</span>
+                            )}
                           </div>
                         )}
-                        <OrderTrackingTimeline status={order.status} className={order.tracking_number ? 'mt-3' : 'mt-2'} />
+                        <OrderTrackingTimeline 
+                          status={order.status} 
+                          events={trackingDetails[order.id]?.events}
+                          origin={trackingDetails[order.id]?.origin}
+                          destination={trackingDetails[order.id]?.destination}
+                          themeColor={colorVariants?.base}
+                          className={order.tracking_number ? 'mt-3' : 'mt-2'} 
+                        />
 
                         {order.items && order.items.length > 0 && (
                           <div className="pt-2">
