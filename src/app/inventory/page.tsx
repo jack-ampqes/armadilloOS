@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Pencil, AlertTriangle, RefreshCw, Minus, PackagePlus } from 'lucide-react'
+import { Plus, Pencil, AlertTriangle, RefreshCw, Minus, PackagePlus, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -40,6 +40,7 @@ export default function InventoryPage() {
   const [displayedProducts, setDisplayedProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [filter, setFilter] = useState('all') // all, low-stock, out-of-stock
   const [sortBy, setSortBy] = useState('sku') // name, sku, price, stock
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
@@ -66,12 +67,12 @@ export default function InventoryPage() {
   }, [page])
 
   useEffect(() => {
-    // Reset to first page when filter or sort changes
+    // Reset to first page when filter, sort, or search changes
     setPage(1)
     const filtered = getFilteredProducts()
     const sorted = getSortedProducts(filtered)
     setDisplayedProducts(sorted.slice(0, PRODUCTS_PER_PAGE))
-  }, [filter, sortBy, sortOrder, allProducts])
+  }, [filter, sortBy, sortOrder, searchQuery, allProducts])
 
   useEffect(() => {
     // Set up infinite scroll
@@ -136,7 +137,7 @@ export default function InventoryPage() {
   }
 
   const getFilteredProducts = () => {
-    return allProducts.filter(product => {
+    let list = allProducts.filter(product => {
       switch (filter) {
         case 'low-stock':
           return (product.inventory?.quantity || 0) <= (product.inventory?.minStock || 0) && (product.inventory?.quantity || 0) > 0
@@ -146,6 +147,17 @@ export default function InventoryPage() {
           return true
       }
     })
+    const q = searchQuery.trim().toLowerCase()
+    if (q) {
+      list = list.filter(
+        p =>
+          (p.name && p.name.toLowerCase().includes(q)) ||
+          (p.sku && p.sku.toLowerCase().includes(q)) ||
+          (p.description && p.description.toLowerCase().includes(q)) ||
+          (p.color && p.color.toLowerCase().includes(q))
+      )
+    }
+    return list
   }
 
   const getSortedProducts = (products: Product[]) => {
@@ -425,14 +437,36 @@ export default function InventoryPage() {
       </div>
 
         <div className="mt-8">
-          <div className="sm:flex sm:items-center">
-            <div className="sm:flex-auto">
+          <div className="sm:flex sm:items-center sm:gap-4">
+            <div className="sm:flex-auto min-w-0">
               <h2 className="text-lg font-medium text-white">Inventory</h2>
               <p className="text-sm text-white/60 mt-1">
                 Showing {displayedProducts.length} of {getFilteredProducts().length} products
               </p>
             </div>
-            <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none flex gap-3">
+            <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row gap-3 sm:flex-none">
+              <div className="relative flex-1 sm:flex-initial sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 pointer-events-none" aria-hidden />
+                <Input
+                  type="search"
+                  placeholder="Search by name, SKU, color..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 pr-9 bg-white/10 border-white/20 text-white placeholder:text-white/40 w-full [&::-webkit-search-cancel-button]:hidden [&::-moz-search-cancel-button]:hidden"
+                  aria-label="Search inventory"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+                    aria-label="Clear search"
+                  >
+                    <X className="h-4 w-4" aria-hidden />
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-3 flex-wrap">
               <Select value={sortBy} onValueChange={(value) => setSortBy(value)}>
                 <SelectTrigger className="w-[140px]">
                   <SelectValue placeholder="Sort by" />
@@ -467,6 +501,7 @@ export default function InventoryPage() {
                   <SelectItem value="out-of-stock">Out of Stock</SelectItem>
                 </SelectContent>
               </Select>
+              </div>
             </div>
           </div>
 
@@ -589,10 +624,18 @@ export default function InventoryPage() {
           <div className="text-center py-12">
             <div className="text-white/60">
               <p className="text-lg">
-                {filter === 'all' ? 'No products found' : `No products with ${filter.replace('-', ' ')}`}
+                {searchQuery.trim()
+                  ? 'No products match your search'
+                  : filter === 'all'
+                    ? 'No products found'
+                    : `No products with ${filter.replace('-', ' ')}`}
               </p>
               <p className="text-sm mt-2">
-                {filter === 'all' ? 'Get started by adding your first product.' : 'Try a different filter.'}
+                {searchQuery.trim()
+                  ? 'Try a different search term or clear the search.'
+                  : filter === 'all'
+                    ? 'Get started by adding your first product.'
+                    : 'Try a different filter.'}
               </p>
               {filter === 'all' && hasPermission('InventoryEditing') && (
                 <Button asChild className="mt-4">
