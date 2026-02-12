@@ -427,7 +427,7 @@ export default function InventoryPage() {
         <div className="mt-8">
           <div className="sm:flex sm:items-center">
             <div className="sm:flex-auto">
-              <h2 className="text-lg font-medium text-white">Products</h2>
+              <h2 className="text-lg font-medium text-white">Inventory</h2>
               <p className="text-sm text-white/60 mt-1">
                 Showing {displayedProducts.length} of {getFilteredProducts().length} products
               </p>
