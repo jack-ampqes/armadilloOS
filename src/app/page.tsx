@@ -373,7 +373,7 @@ export default function Dashboard() {
                               <div className="flex justify-between items-center">
                                 <span className="text-white/60 text-sm">COGS</span>
                                 <span className="text-orange-400 font-semibold">
-                                  ${(financials.costOfGoodsSold || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  ${Math.abs(financials.costOfGoodsSold || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                               </div>
                               <div className="flex justify-between items-center">

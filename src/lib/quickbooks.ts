@@ -469,12 +469,16 @@ export function parseProfitAndLoss(report: ProfitAndLossResponse): {
       // QuickBooks may return expenses as negative; store as positive for "Total Expenses" display
       totalExpenses = Math.abs(value)
     } else if (group === 'netincome' || (row.type === 'Section' && row.group === 'NetIncome')) {
-      netIncome = value
+      // Don't trust QB's net income row; we derive it below for consistency
     }
   }
 
-  // If netIncome wasn't found directly, derive it
-  if (netIncome === 0 && (totalIncome !== 0 || totalExpenses !== 0)) {
+  // Always derive Net Income from components so the math is correct:
+  // Net Income = Gross Profit - Expenses (or Income - COGS - Expenses).
+  // QB often returns COGS/expenses as negative; totalExpenses is stored as positive.
+  if (grossProfit !== 0 || totalExpenses !== 0) {
+    netIncome = grossProfit - totalExpenses
+  } else if (totalIncome !== 0 || totalExpenses !== 0) {
     netIncome = totalIncome - costOfGoodsSold - totalExpenses
   }
 
