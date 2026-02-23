@@ -17,7 +17,8 @@ import {
   User,
   ScrollText,
   AlertTriangle,
-  ShieldUser
+  ShieldUser,
+  FileStack
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -37,6 +38,7 @@ const navigation = [
   { name: 'Distributors', href: '/distributors', icon: Warehouse },
   { name: 'Alerts', href: '/alerts', icon: AlertTriangle },
   { name: 'Users', href: '/admin/users', icon: ShieldUser },
+  { name: 'Documents', href: '/admin/documents', icon: FileStack },
 ]
 
 /** Sidebar nav items allowed per role. Others are hidden and routes are protected in middleware. */

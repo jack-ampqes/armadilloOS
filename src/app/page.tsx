@@ -18,6 +18,7 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
+  FileStack,
 } from "lucide-react"
 import { usePermissions } from '@/lib/usePermissions'
 import type { Role } from '@/lib/permissions'
@@ -136,6 +137,7 @@ export default function Dashboard() {
     { title: "Distributors", description: "Manage distributors and partnerships", href: "/distributors", icon: Warehouse },
     { title: "Reports", description: "View sales, inventory, and quote reports", href: "/reports/sales", icon: TrendingUp },
     { title: "Alerts", description: "View and manage system alerts", href: "/alerts", icon: AlertTriangle },
+    { title: "Documents", description: "Safely store and view documents (admin)", href: "/admin/documents", icon: FileStack },
   ]
 
   /** Dashboard section hrefs allowed per role. Admin sees all. */
