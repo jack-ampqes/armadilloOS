@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { FileStack, Loader2, AlertCircle, Upload, Trash2, FileText, Eye } from 'lucide-react'
+import { FileStack, Loader2, AlertCircle, Upload, Trash2, FileText, Eye, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -296,8 +296,8 @@ export default function AdminDocumentsPage() {
         <div className="fixed inset-0 z-50 flex flex-col bg-black/90">
           <div className="flex items-center justify-between px-4 py-3 bg-[#181818] border-b border-white/20">
             <span className="text-white font-medium">Document viewer</span>
-            <Button variant="outline" size="sm" onClick={closeViewer}>
-              Close
+            <Button variant="outline" size="icon" className="border-none hover:bg-white/10" onClick={closeViewer}>
+              <X className="h-4 w-4" />
             </Button>
           </div>
           <div className="flex-1 min-h-0 p-4">
