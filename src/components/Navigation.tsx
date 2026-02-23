@@ -37,8 +37,8 @@ const navigation = [
   { name: 'Sales Reps', href: '/sales-reps', icon: MapPinned },
   { name: 'Distributors', href: '/distributors', icon: Warehouse },
   { name: 'Alerts', href: '/alerts', icon: AlertTriangle },
-  { name: 'Users', href: '/admin/users', icon: ShieldUser },
   { name: 'Documents', href: '/admin/documents', icon: FileStack },
+  { name: 'Users', href: '/admin/users', icon: ShieldUser },
 ]
 
 /** Sidebar nav items allowed per role. Others are hidden and routes are protected in middleware. */
