@@ -238,7 +238,7 @@ export default function AdminDocumentsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-white/80">Name</TableHead>
+                  <TableHead className="text-white/80 pl-4">Name</TableHead>
                   <TableHead className="text-white/80">Size</TableHead>
                   <TableHead className="text-white/80">Uploaded</TableHead>
                   <TableHead className="text-white/80 w-[180px]"> </TableHead>
