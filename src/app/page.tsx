@@ -143,8 +143,8 @@ export default function Dashboard() {
   /** Dashboard section hrefs allowed per role. Admin sees all. */
   const DASHBOARD_SECTIONS_BY_ROLE: Record<Role, Set<string>> = {
     Admin: new Set(allSections.map((s) => s.href)),
-    'Sales Rep': new Set(['/quotes', '/inventory', '/alerts']),
-    Distributor: new Set(['/quotes', '/inventory', '/alerts']),
+    'Sales Rep': new Set(['/inventory', '/alerts']),
+    Distributor: new Set(['/inventory', '/alerts']),
     Technician: new Set(['/inventory', '/alerts']),
   }
 

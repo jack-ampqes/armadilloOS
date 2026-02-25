@@ -44,8 +44,8 @@ const navigation = [
 /** Sidebar nav items allowed per role. Others are hidden and routes are protected in middleware. */
 const ALLOWED_NAV_BY_ROLE: Record<Role, Set<string>> = {
   Admin: new Set(navigation.map((n) => n.href)),
-  'Sales Rep': new Set(['/', '/quotes', '/inventory', '/alerts']),
-  Distributor: new Set(['/', '/quotes', '/inventory', '/alerts']),
+  'Sales Rep': new Set(['/', '/inventory', '/alerts']),
+  Distributor: new Set(['/', '/inventory', '/alerts']),
   Technician: new Set(['/', '/inventory', '/alerts']),
 }
 
