@@ -34,7 +34,7 @@ function isPathAllowedForRole(pathname: string, role: Role | null): boolean {
   if (pathname.startsWith('/reports')) return false
 
   if (pathname.startsWith('/quotes')) {
-    return role === 'Admin'
+    return false
   }
 
   if (pathname === '/inventory/codes' || pathname.startsWith('/inventory/codes/')) {
