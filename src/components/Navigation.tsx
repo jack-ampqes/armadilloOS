@@ -107,10 +107,13 @@ export default function Navigation() {
 
   useEffect(() => {
     let aborted = false
+    const controller = new AbortController()
 
     const fetchUnreadAlertsCount = async () => {
       try {
-        const response = await fetch('/api/alerts?resolved=false&limit=500')
+        const response = await fetch('/api/alerts?resolved=false&limit=500', {
+          signal: controller.signal,
+        })
         if (!response.ok) return
 
         const data = (await response.json()) as Alert[]
@@ -118,6 +121,7 @@ export default function Navigation() {
 
         setUnreadAlertsCount(data.filter((a) => !a.read).length)
       } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') return
         console.error('Error fetching alerts:', error)
       }
     }
@@ -127,6 +131,7 @@ export default function Navigation() {
 
     return () => {
       aborted = true
+      controller.abort()
       clearInterval(interval)
     }
   }, [])
