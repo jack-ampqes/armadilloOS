@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS documents (
   file_size bigint,
   content_type text DEFAULT 'application/pdf',
   uploaded_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  title text,
+  thumbnail_path text,
   created_at timestamptz DEFAULT now()
 );
 
@@ -58,3 +60,7 @@ USING (bucket_id = 'documents');
 CREATE POLICY "Allow anon documents delete"
 ON storage.objects FOR DELETE TO anon
 USING (bucket_id = 'documents');
+
+-- Optional: add title and thumbnail_path if table already existed (run if you get column errors)
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS title text;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS thumbnail_path text;

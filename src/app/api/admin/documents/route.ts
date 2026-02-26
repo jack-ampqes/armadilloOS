@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   try {
     const { data, error } = await supabaseAdmin
       .from('documents')
-      .select('id, name, file_size, content_type, created_at')
+      .select('id, name, title, file_size, content_type, created_at, thumbnail_path')
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
         content_type: file.type,
         uploaded_by: auth.user.id,
       })
-      .select('id, name, file_size, content_type, created_at')
+      .select('id, name, title, file_size, content_type, created_at, thumbnail_path')
       .single()
 
     if (insertError) {

@@ -2,25 +2,19 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { FileStack, Loader2, AlertCircle, Upload, Trash2, FileText, Eye, X } from 'lucide-react'
+import { FileStack, Loader2, AlertCircle, Upload, Trash2, FileText, Eye, X, ImagePlus } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { usePermissions } from '@/lib/usePermissions'
 
 interface DocumentRow {
   id: string
   name: string
+  title: string | null
   file_size: number | null
   content_type: string | null
   created_at: string
+  thumbnail_path: string | null
 }
 
 export default function AdminDocumentsPage() {
@@ -34,7 +28,11 @@ export default function AdminDocumentsPage() {
   const [viewingId, setViewingId] = useState<string | null>(null)
   const [viewUrl, setViewUrl] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [thumbnailUploadingId, setThumbnailUploadingId] = useState<string | null>(null)
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null)
+  const [editTitleValue, setEditTitleValue] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const thumbnailInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const isAdmin = role === 'Admin'
   const roleKnown = role !== null
@@ -96,6 +94,55 @@ export default function AdminDocumentsPage() {
     }
   }
 
+  const handleThumbnailUpload = async (docId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      return
+    }
+    setThumbnailUploadingId(docId)
+    try {
+      const formData = new FormData()
+      formData.append('thumbnail', file)
+      const res = await fetch(`/api/admin/documents/${docId}/thumbnail`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setDocuments((prev) =>
+          prev.map((d) => (d.id === docId ? { ...d, thumbnail_path: data.thumbnail_path } : d))
+        )
+      }
+    } finally {
+      setThumbnailUploadingId(null)
+      const input = thumbnailInputRefs.current[docId]
+      if (input) input.value = ''
+    }
+  }
+
+  const saveTitle = async (docId: string) => {
+    const value = editTitleValue.trim()
+    setEditingTitleId(null)
+    try {
+      const res = await fetch(`/api/admin/documents/${docId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: value || null }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setDocuments((prev) =>
+          prev.map((d) => (d.id === docId ? { ...d, title: data.title ?? null } : d))
+        )
+      }
+    } catch {
+      // revert to previous on error
+      const doc = documents.find((d) => d.id === docId)
+      if (doc) setEditTitleValue(doc.title || doc.name)
+    }
+  }
+
   const openDocument = async (id: string) => {
     setViewingId(id)
     setViewUrl(null)
@@ -128,23 +175,7 @@ export default function AdminDocumentsPage() {
     }
   }
 
-  const formatSize = (bytes: number | null) => {
-    if (bytes == null) return '—'
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
-  const formatDate = (iso: string) => {
-    try {
-      return new Date(iso).toLocaleDateString(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      })
-    } catch {
-      return iso
-    }
-  }
+  const displayTitle = (doc: DocumentRow) => doc.title || doc.name
 
   if (!roleKnown) {
     return (
@@ -188,10 +219,10 @@ export default function AdminDocumentsPage() {
           accept="application/pdf"
           onChange={handleUpload}
           disabled={uploading}
-          className="hidden border-none"
+          className="hidden"
           id="doc-upload"
         />
-        <Button 
+        <Button
           className="border-none bg-white/10"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
@@ -223,73 +254,115 @@ export default function AdminDocumentsPage() {
         </Card>
       )}
 
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-10 w-10 animate-spin text-white/60" />
-            </div>
-          ) : documents.length === 0 ? (
-            <div className="py-12 text-center text-white/60 flex flex-col items-center gap-2">
-              <FileText className="h-12 w-12 text-white/40" />
-              <p>No documents yet. Upload a PDF to get started.</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-white/80 pl-4">Name</TableHead>
-                  <TableHead className="text-white/80">Size</TableHead>
-                  <TableHead className="text-white/80">Uploaded</TableHead>
-                  <TableHead className="text-white/80 w-[180px]"> </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {documents.map((doc) => (
-                  <TableRow key={doc.id}>
-                    <TableCell className="text-white font-medium border-none pl-4">
-                      <button
-                        type="button"
-                        onClick={() => openDocument(doc.id)}
-                        className="text-left hover:underline focus:underline"
-                      >
-                        {doc.name}
-                      </button>
-                    </TableCell>
-                    <TableCell className="text-white/80">{formatSize(doc.file_size)}</TableCell>
-                    <TableCell className="text-white/60 text-sm">{formatDate(doc.created_at)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="text-white hover:text-white/80 border-none"
-                          onClick={() => openDocument(doc.id)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="outline"
-                          size="icon"
-                          className="text-red-400 hover:text-red-300 border-none hover:bg-red-500/10"
-                          onClick={() => deleteDocument(doc.id)}
-                          disabled={deletingId === doc.id}
-                        >
-                          {deletingId === doc.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {loading ? (
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-10 w-10 animate-spin text-white/60" />
+        </div>
+      ) : documents.length === 0 ? (
+        <div className="py-24 text-center text-white/60 flex flex-col items-center gap-2">
+          <FileText className="h-16 w-16 text-white/40" />
+          <p>No documents yet. Upload a PDF to get started.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {documents.map((doc) => (
+            <Card key={doc.id} className="overflow-hidden border-white/20 flex flex-col">
+              {/* Thumbnail area */}
+              <div className="relative aspect-[4/3] bg-white/5 flex items-center justify-center group">
+                {doc.thumbnail_path ? (
+                  <img
+                    src={`/api/admin/documents/${doc.id}/thumbnail`}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <FileText className="h-16 w-16 text-white/30" />
+                )}
+                <input
+                  ref={(el) => {
+                    thumbnailInputRefs.current[doc.id] = el
+                  }}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={(e) => handleThumbnailUpload(doc.id, e)}
+                  className="hidden"
+                  id={`thumb-${doc.id}`}
+                />
+                <label
+                  htmlFor={`thumb-${doc.id}`}
+                  className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                >
+                  {thumbnailUploadingId === doc.id ? (
+                    <Loader2 className="h-8 w-8 animate-spin text-white" />
+                  ) : (
+                    <span className="flex items-center gap-2 rounded-lg bg-white/20 px-3 py-2 text-sm text-white">
+                      <ImagePlus className="h-4 w-4" />
+                      {doc.thumbnail_path ? 'Change' : 'Add'} thumbnail
+                    </span>
+                  )}
+                </label>
+              </div>
+              <CardContent className="p-4 flex-1 flex flex-col">
+                {/* Title */}
+                <div className="min-h-[1rem] flex items-center">
+                  {editingTitleId === doc.id ? (
+                    <input
+                      type="text"
+                      value={editTitleValue}
+                      onChange={(e) => setEditTitleValue(e.target.value)}
+                      onBlur={() => saveTitle(doc.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveTitle(doc.id)
+                        if (e.key === 'Escape') {
+                          setEditingTitleId(null)
+                          setEditTitleValue(displayTitle(doc))
+                        }
+                      }}
+                      className="flex-1 bg-white/10 border border-white/20 rounded px-2 py-1 text-white text-sm focus:outline-none focus:ring-1 focus:ring-white/40"
+                      autoFocus
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingTitleId(doc.id)
+                        setEditTitleValue(displayTitle(doc))
+                      }}
+                      className="text-left text-white font-medium truncate w-full hover:underline"
+                    >
+                      {displayTitle(doc)}
+                    </button>
+                  )}
+                </div>
+                {/* Actions */}
+                <div className="flex items-center gap-2 mt-3 pt-3">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="flex-1 border-none hover:bg-white/20"
+                    onClick={() => openDocument(doc.id)}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="flex-1 border-none text-red-400 hover:text-red-300 border-none hover:bg-red-500/10"
+                    onClick={() => deleteDocument(doc.id)}
+                    disabled={deletingId === doc.id}
+                  >
+                    {deletingId === doc.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Embedded PDF viewer modal */}
       {viewingId && (
