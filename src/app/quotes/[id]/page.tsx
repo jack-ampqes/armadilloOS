@@ -189,10 +189,40 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
-  const downloadPDF = () => {
+  /** Load logo, downsample to target size, and return as JPEG data URL to keep PDF small. */
+  const getCompressedLogoDataUrl = (): Promise<string | null> =>
+    new Promise((resolve) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        try {
+          const targetW = 200
+          const targetH = Math.round((img.height / img.width) * targetW)
+          const canvas = document.createElement('canvas')
+          canvas.width = targetW
+          canvas.height = targetH
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            resolve(null)
+            return
+          }
+          ctx.fillStyle = 'rgb(30,30,30)'
+          ctx.fillRect(0, 0, targetW, targetH)
+          ctx.drawImage(img, 0, 0, targetW, targetH)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.88)
+          resolve(dataUrl)
+        } catch {
+          resolve(null)
+        }
+      }
+      img.onerror = () => resolve(null)
+      img.src = '/Armadillo_FullLogo_White.png'
+    })
+
+  const downloadPDF = async () => {
     if (!quote) return
 
-    const doc = new jsPDF()
+    const doc = new jsPDF({ compress: true })
     const pageWidth = doc.internal.pageSize.getWidth()
     
     // Colors
@@ -207,7 +237,13 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
     doc.setTextColor(255, 255, 255)
     doc.setFontSize(24)
     doc.setFont('helvetica', 'bold')
-    doc.addImage('/Armadillo_FullLogo_White.png', 'PNG', 10, 12, 50, 12)
+    const logoDataUrl = await getCompressedLogoDataUrl()
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, 'JPEG', 10, 12, 50, 12)
+    } else {
+      doc.setFontSize(14)
+      doc.text('Armadillo Safety Products', 10, 20)
+    }
     
     doc.setFontSize(10)
     doc.setTextColor(255, 255, 255)
