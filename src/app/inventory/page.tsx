@@ -3,17 +3,23 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Pencil, AlertTriangle, RefreshCw, Minus, PackagePlus, Search, X } from 'lucide-react'
+import { Plus, Pencil, AlertTriangle, RefreshCw, Minus, PackagePlus, Search, X, History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { CirclePile, DollarSign, OctagonAlert, OctagonX } from 'lucide-react'
+import { CirclePile, OctagonAlert, OctagonX } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { usePermissions } from '@/lib/usePermissions'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 interface Product {
   id: string
@@ -34,6 +40,16 @@ interface Product {
   }>
 }
 
+interface InventoryHistoryEntry {
+  id: string
+  sku: string
+  quantity_change: number
+  quantity_after: number
+  source: string
+  created_at: string
+  user_email?: string | null
+}
+
 export default function InventoryPage() {
   const router = useRouter()
   const [allProducts, setAllProducts] = useState<Product[]>([])
@@ -52,6 +68,9 @@ export default function InventoryPage() {
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 })
   const [hoveredProduct, setHoveredProduct] = useState<Product | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 })
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [history, setHistory] = useState<InventoryHistoryEntry[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
   const PRODUCTS_PER_PAGE = 50
   const { hasPermission } = usePermissions()
 
@@ -214,14 +233,6 @@ export default function InventoryPage() {
     return { status: 'In Stock' }
   }
 
-  const getTotalInventoryValue = () => {
-    return allProducts.reduce((total, product) => {
-      const quantity = product.inventory?.quantity ?? 0
-      const price = product.price ?? 0
-      return total + (price * quantity)
-    }, 0)
-  }
-
   const handleStockClick = (product: Product, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!hasPermission('InventoryEditing')) return
@@ -266,6 +277,39 @@ export default function InventoryPage() {
     setTooltipPosition({ x: e.clientX + 12, y: e.clientY + 12 })
   }
 
+  const fetchHistory = async () => {
+    setHistoryLoading(true)
+    try {
+      const res = await fetch('/api/inventory/history?limit=200')
+      if (res.ok) {
+        const data = await res.json()
+        setHistory(data.history || [])
+      } else {
+        setHistory([])
+      }
+    } catch {
+      setHistory([])
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const handleHistoryOpen = (open: boolean) => {
+    setHistoryOpen(open)
+    if (open) fetchHistory()
+    if (!open) setHoveredProduct(null)
+  }
+
+  const handleHistorySkuHover = (sku: string, e?: React.MouseEvent) => {
+    if (!e) {
+      setHoveredProduct(null)
+      return
+    }
+    const product = allProducts.find((p) => p.sku === sku) ?? null
+    setTooltipPosition({ x: e.clientX + 12, y: e.clientY + 12 })
+    setHoveredProduct(product)
+  }
+
   const handleStockUpdate = async (operation: 'add' | 'subtract') => {
     if (!selectedProduct) return
     
@@ -298,6 +342,7 @@ export default function InventoryPage() {
       // Refresh the products list
       await fetchProducts()
       setStockDialogOpen(false)
+      if (historyOpen) fetchHistory()
       setQuantityInput('')
       setSelectedProduct(null)
     } catch (error) {
@@ -335,16 +380,24 @@ export default function InventoryPage() {
           )}
 
           {hasPermission('InventoryViewing') && (
-            <Button 
-              variant="outline" 
-              size="icon"
-              onClick={() => fetchProducts()}
-              disabled={loading}
-              title="Refresh inventory"
-              className="group"
-            >
-              <RefreshCw className={`h-5 w-5 transition-transform duration-300 ${loading ? 'animate-spin' : 'group-hover:rotate-180'}`} />
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={() => handleHistoryOpen(true)}
+              >
+                <History size={20} aria-hidden="true" /> Inventory History
+              </Button>
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => fetchProducts()}
+                disabled={loading}
+                title="Refresh inventory"
+                className="group"
+              >
+                <RefreshCw className={`h-5 w-5 transition-transform duration-300 ${loading ? 'animate-spin' : 'group-hover:rotate-180'}`} />
+              </Button>
+            </>
           )}
 
           {hasPermission('InventoryEditing') && (
@@ -371,24 +424,6 @@ export default function InventoryPage() {
                 <dl>
                   <dt className="text-sm font-medium text-white/60 truncate">Total Products</dt>
                   <dd className="text-lg font-medium text-white">{allProducts.length}</dd>
-                </dl>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-black stroke-[1.5]" />
-              </div>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-white/60 truncate">Inventory Value</dt>
-                  <dd className="text-lg font-medium text-white">${getTotalInventoryValue().toFixed(2)}</dd>
                 </dl>
               </div>
             </div>
@@ -728,10 +763,10 @@ export default function InventoryPage() {
         </>
       )}
 
-      {/* Product Hover Tooltip */}
+      {/* Product Hover Tooltip (z-[100] so it appears above dialogs) */}
       {hoveredProduct && (
         <div
-          className="fixed z-50 pointer-events-none bg-[#1a1a1a] border border-white/20 rounded-lg p-3 shadow-xl max-w-xs"
+          className="fixed z-[100] pointer-events-none bg-[#1a1a1a] border border-white/20 rounded-lg p-3 shadow-xl max-w-xs"
           style={{
             left: `${Math.min(tooltipPosition.x, window.innerWidth - 320)}px`,
             top: `${Math.min(tooltipPosition.y, window.innerHeight - 200)}px`,
@@ -774,6 +809,67 @@ export default function InventoryPage() {
           </div>
         </div>
       )}
+
+      {/* Inventory History Dialog */}
+      <Dialog open={historyOpen} onOpenChange={handleHistoryOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col border-white/20 bg-[#181818] text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white text-xl">Inventory History</DialogTitle>
+          </DialogHeader>
+          <p className="text-base text-white/60 -mt-2">
+            When stock was added or removed (manual adjustments, manufacturer orders, scan).
+          </p>
+          <div className="flex-1 overflow-auto min-h-0 border border-white/10 rounded-lg">
+            {historyLoading ? (
+              <div className="p-10 flex items-center justify-center">
+                <RefreshCw className="h-10 w-10 animate-spin text-white/40" />
+              </div>
+            ) : history.length === 0 ? (
+              <div className="p-10 text-center text-white/60 text-base">
+                No inventory history yet. Adjustments will appear here.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-white/10 hover:bg-transparent">
+                    <TableHead className="text-white/60 text-sm font-medium">Date</TableHead>
+                    <TableHead className="text-white/60 text-sm font-medium">SKU</TableHead>
+                    <TableHead className="text-white/60 text-sm font-medium">Change</TableHead>
+                    <TableHead className="text-white/60 text-sm font-medium">Qty after</TableHead>
+                    <TableHead className="text-white/60 text-sm font-medium">User</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {history.map((entry) => (
+                    <TableRow key={entry.id} className="border-white/10">
+                      <TableCell className="text-white/80 font-mono text-sm">
+                        {new Date(entry.created_at).toLocaleString()}
+                      </TableCell>
+                      <TableCell
+                        className="text-white/80 font-mono text-sm cursor-default hover:text-blue-400 transition-colors"
+                        onMouseEnter={(e) => handleHistorySkuHover(entry.sku, e)}
+                        onMouseMove={(e) => setTooltipPosition({ x: e.clientX + 12, y: e.clientY + 12 })}
+                        onMouseLeave={() => handleHistorySkuHover('', undefined)}
+                      >
+                        {entry.sku}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <span className={entry.quantity_change > 0 ? 'text-green-400' : 'text-red-400'}>
+                          {entry.quantity_change > 0 ? '+' : ''}{entry.quantity_change}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-white/80 text-sm">{entry.quantity_after}</TableCell>
+                      <TableCell className="text-white/60 text-sm truncate max-w-[200px]">
+                        {entry.user_email ?? '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

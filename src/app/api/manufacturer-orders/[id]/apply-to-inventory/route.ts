@@ -16,6 +16,7 @@ export async function POST(
   if ('response' in auth) {
     return auth.response
   }
+  const { user } = auth
 
   try {
     const { id: orderId } = await params
@@ -85,7 +86,19 @@ export async function POST(
         skipped.push(sku)
         continue
       }
+      const quantityAfter = currentQty + addQty
       applied.push({ sku, quantity: addQty })
+      await supabase
+        .schema('armadillo_inventory')
+        .from('inventory_history')
+        .insert({
+          sku,
+          quantity_change: addQty,
+          quantity_after: quantityAfter,
+          source: 'manufacturer_order',
+          user_id: user.id,
+          user_email: user.email,
+        })
     }
 
     const { error: updateOrderErr } = await supabase

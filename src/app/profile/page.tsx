@@ -21,12 +21,21 @@ import {
 import { getCroppedImg } from '@/lib/crop-image'
 import { User, Edit2, Save, X, Camera, Loader2, ChevronDown } from 'lucide-react'
 
+interface CompanyRef {
+  id: string
+  name: string
+  icon_url?: string | null
+  logo_url?: string | null
+}
+
 interface UserProfile {
   id: string
   email: string
   name: string | null
   role: string
   avatar_url?: string | null
+  company_id?: string | null
+  companies?: CompanyRef | null
   created_at: string
   updated_at: string
 }
@@ -477,15 +486,15 @@ function ProfilePageContent() {
                 >
                   <Image
                     src={
-                      profile.avatar_url
-                        ? `${profile.avatar_url}${profile.avatar_url.includes('?') ? '&' : '?'}t=${profile.updated_at || ''}`
+                      (profile.companies?.logo_url || profile.avatar_url)
+                        ? `${profile.companies?.logo_url || profile.avatar_url}${(profile.companies?.logo_url || profile.avatar_url || '').includes('?') ? '&' : '?'}t=${profile.updated_at || ''}`
                         : '/armadilloProfile.png'
                     }
                     alt="Profile"
                     width={64}
                     height={64}
                     className="object-cover w-full h-full"
-                    unoptimized={!!profile.avatar_url}
+                    unoptimized={!!(profile.companies?.logo_url || profile.avatar_url)}
                   />
                   {avatarUploading ? (
                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
@@ -498,11 +507,22 @@ function ProfilePageContent() {
                   )}
                 </button>
               </div>
-              <div>
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-xl font-semibold text-white">
                   {profile.name || 'No name set'}
                 </h2>
-                <p className="text-white/60 text-sm">{profile.email}</p>
+                {profile.companies?.icon_url && (
+                  <Image
+                    src={`${profile.companies.icon_url}${profile.updated_at ? `?t=${profile.updated_at}` : ''}`}
+                    alt=""
+                    width={24}
+                    height={24}
+                    className="object-contain rounded"
+                    unoptimized
+                    title={profile.companies.name}
+                  />
+                )}
+                <p className="text-white/60 text-sm w-full">{profile.email}</p>
               </div>
             </div>
             <Badge variant={getRoleBadgeVariant(profile.role)} className="text-xs">

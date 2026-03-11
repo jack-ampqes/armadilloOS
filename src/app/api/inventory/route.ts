@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
   if ('response' in auth) {
     return auth.response
   }
+  const { user } = auth
 
   try {
     const body = await request.json()
@@ -133,12 +134,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (existingInventory) {
+      const quantityDelta = quantity || 0
+      const newQuantity = (existingInventory.quantity || 0) + quantityDelta
+
       // Update existing inventory
       const { data: updatedInventory, error: updateError } = await supabase
         .schema('armadillo_inventory')
         .from('inventory')
-        .update({ 
-          quantity: (existingInventory.quantity || 0) + (quantity || 0),
+        .update({
+          quantity: newQuantity,
           updated_at: new Date().toISOString()
         })
         .eq('sku', sku)
@@ -147,6 +151,21 @@ export async function POST(request: NextRequest) {
 
       if (updateError) throw updateError
       inventory = updatedInventory
+
+      // Record in inventory_history (only when quantity actually changed)
+      if (quantityDelta !== 0) {
+        await supabase
+          .schema('armadillo_inventory')
+          .from('inventory_history')
+          .insert({
+            sku,
+            quantity_change: quantityDelta,
+            quantity_after: newQuantity,
+            source: 'manual',
+            user_id: user.id,
+            user_email: user.email
+          })
+      }
     } else {
       // Create new inventory record (if product exists, you may want to handle this differently)
       return NextResponse.json(

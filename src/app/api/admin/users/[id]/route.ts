@@ -5,7 +5,7 @@ import type { Role } from '@/lib/permissions'
 
 const VALID_ROLES: Role[] = ['Admin', 'Sales Rep', 'Distributor', 'Technician']
 
-/** PATCH /api/admin/users/[id] — update a user's role (Admin only). */
+/** PATCH /api/admin/users/[id] — update a user's role and/or name (Admin only). */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -18,31 +18,49 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await request.json()
-    const { role } = body
+    const { role, name, company_id } = body
 
-    if (!role || typeof role !== 'string') {
-      return NextResponse.json(
-        { error: 'Role is required' },
-        { status: 400 }
-      )
+    const updates: { role?: string; name?: string | null; company_id?: string | null; updated_at: string } = {
+      updated_at: new Date().toISOString(),
     }
 
-    const trimmedRole = role.trim()
-    if (!VALID_ROLES.includes(trimmedRole as Role)) {
+    if (role !== undefined) {
+      if (!role || typeof role !== 'string') {
+        return NextResponse.json(
+          { error: 'Role must be a non-empty string' },
+          { status: 400 }
+        )
+      }
+      const trimmedRole = role.trim()
+      if (!VALID_ROLES.includes(trimmedRole as Role)) {
+        return NextResponse.json(
+          { error: `Role must be one of: ${VALID_ROLES.join(', ')}` },
+          { status: 400 }
+        )
+      }
+      updates.role = trimmedRole
+    }
+
+    if (name !== undefined) {
+      updates.name = typeof name === 'string' ? (name.trim() || null) : null
+    }
+
+    if (company_id !== undefined) {
+      updates.company_id = company_id === null || company_id === '' ? null : String(company_id)
+    }
+
+    if (role === undefined && name === undefined && company_id === undefined) {
       return NextResponse.json(
-        { error: `Role must be one of: ${VALID_ROLES.join(', ')}` },
+        { error: 'Provide at least one of: role, name, company_id' },
         { status: 400 }
       )
     }
 
     const { data: user, error } = await supabaseAdmin
       .from('users')
-      .update({
-        role: trimmedRole,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updates)
       .eq('id', id)
-      .select('id, email, name, role, created_at, updated_at')
+      .select('id, email, name, role, avatar_url, company_id, created_at, updated_at, companies(id, name, icon_url, logo_url)')
       .single()
 
     if (error) {

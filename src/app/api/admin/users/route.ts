@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   try {
     const { data: users, error } = await supabaseAdmin
       .from('users')
-      .select('id, email, name, role, created_at, updated_at')
+      .select('id, email, name, role, avatar_url, company_id, created_at, updated_at, companies(id, name, icon_url, logo_url)')
       .order('created_at', { ascending: false })
 
     if (error) {

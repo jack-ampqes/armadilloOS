@@ -15,36 +15,31 @@ export async function GET(request: NextRequest) {
     // Query user from Supabase (use admin client to bypass RLS)
     const { data: user, error } = await supabaseAdmin
       .from('users')
-      .select('id, email, name, role, avatar_url, created_at, updated_at')
+      .select('id, email, name, role, avatar_url, company_id, created_at, updated_at, companies(id, name, icon_url, logo_url)')
       .eq('email', userEmail.toLowerCase().trim())
       .single()
 
     if (error) {
       console.error('Profile fetch error:', error)
-      // If columns don't exist, try without them
-      if (error.message?.includes('column') || error.code === '42703') {
+      // If companies/company_id missing or relation companies doesn't exist, try without
+      const isMissingSchema = error.message?.includes('column') || error.code === '42703' ||
+        error.message?.includes('companies') || error.message?.includes('company_id')
+      if (isMissingSchema) {
         const { data: basicUser, error: basicError } = await supabaseAdmin
           .from('users')
-          .select('id, email, created_at, updated_at')
+          .select('id, email, name, role, avatar_url, created_at, updated_at')
           .eq('email', userEmail.toLowerCase().trim())
           .single()
-        
+
         if (basicError || !basicUser) {
           return NextResponse.json(
             { error: 'User not found' },
             { status: 404 }
           )
         }
-        
-        // Return with default values for missing columns
-        return NextResponse.json({
-          ...basicUser,
-          name: null,
-          role: auth.user.role,
-          avatar_url: null,
-        })
+        return NextResponse.json({ ...basicUser, company_id: null, companies: null })
       }
-      
+
       return NextResponse.json(
         { error: error.message || 'User not found' },
         { status: 404 }
