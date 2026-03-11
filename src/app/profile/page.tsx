@@ -508,7 +508,6 @@ function ProfilePageContent() {
       <div className="max-w-2xl w-full">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-white mb-2">Profile</h1>
-          <p className="text-white/60">Manage your account information</p>
         </div>
 
         <Card className="bg-[#1f1f1f] border-white/20 p-6">
