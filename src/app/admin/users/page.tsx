@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ShieldUser, Loader2, AlertCircle, Pencil, Camera, Check, X, Building2 } from 'lucide-react'
+import { ShieldUser, Loader2, AlertCircle, Pencil, Camera, Check, X, Building2, Upload, Copy } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,6 +26,12 @@ import {
 import { usePermissions } from '@/lib/usePermissions'
 import type { Role, Permission } from '@/lib/permissions'
 import { ROLE_PERMISSIONS } from '@/lib/permissions'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 const ROLES: Role[] = ['Admin', 'Sales Rep', 'Distributor', 'Technician']
 
@@ -70,7 +76,18 @@ export default function AdminUsersPage() {
   const [editingNameValue, setEditingNameValue] = useState('')
   const [avatarUploadingId, setAvatarUploadingId] = useState<string | null>(null)
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
+  const [importLoading, setImportLoading] = useState(false)
+  const [importResult, setImportResult] = useState<{
+    added: number
+    skipped: number
+    temporaryPassword?: string
+    errors?: string[]
+  } | null>(null)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importDragOver, setImportDragOver] = useState(false)
   const avatarInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const csvInputRef = useRef<HTMLInputElement | null>(null)
 
   const isAdmin = role === 'Admin'
   const roleKnown = role !== null
@@ -230,8 +247,73 @@ export default function AdminUsersPage() {
   }
 
   const displayPhotoUrl = (user: UserRow) => {
-    if (user.companies?.logo_url) return user.companies.logo_url
-    return user.avatar_url ?? null
+    if (user.avatar_url) return user.avatar_url
+    return user.companies?.logo_url ?? null
+  }
+
+  const sortedUsers = [...users].sort((a, b) => {
+    const nameA = (a.companies?.name ?? '').toLowerCase()
+    const nameB = (b.companies?.name ?? '').toLowerCase()
+    if (nameA === '' && nameB === '') return 0
+    if (nameA === '') return 1
+    if (nameB === '') return -1
+    return nameA.localeCompare(nameB)
+  })
+
+  const handleImportCSV = async (file: File | null) => {
+    if (!file) return
+    setImportLoading(true)
+    setImportResult(null)
+    setSaveError(null)
+    try {
+      const formData = new FormData()
+      formData.append('csv', file)
+      const res = await fetch('/api/admin/users/import', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setImportResult({
+          added: data.added ?? 0,
+          skipped: data.skipped ?? 0,
+          temporaryPassword: data.temporaryPassword,
+          errors: data.errors,
+        })
+        setImportFile(null)
+        await fetchUsers()
+      } else {
+        setSaveError(data?.error || 'Import failed')
+      }
+    } catch {
+      setSaveError('Import failed')
+    } finally {
+      setImportLoading(false)
+    }
+  }
+
+  const onImportFileSelect = (file: File | null) => {
+    if (!file) return
+    const isCsv = file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv'
+    if (!isCsv) {
+      setSaveError('Please select a CSV file.')
+      return
+    }
+    setImportFile(file)
+    setSaveError(null)
+  }
+
+  const openImportDialog = () => {
+    setImportDialogOpen(true)
+    setImportFile(null)
+    setImportResult(null)
+    setSaveError(null)
+  }
+
+  const copyTempPassword = () => {
+    if (importResult?.temporaryPassword) {
+      navigator.clipboard.writeText(importResult.temporaryPassword)
+    }
   }
 
   // Wait for role to load from cookie before deciding; avoid redirecting admins on first paint
@@ -273,12 +355,25 @@ export default function AdminUsersPage() {
             <ShieldUser className="h-8 w-8 text-white/80" />
             Users & roles
           </h1>
+          <p className="mt-1 text-sm text-white/50">
+            Import CSV: columns <strong>email</strong> (required), <strong>name</strong>, <strong>role</strong>, <strong>company</strong> (company name).
+          </p>
         </div>
-        <Link href="/admin/companies">
-          <Button variant="outline">
-            <Building2 className="h-4 w-4 mr-2" /> Company Profiles
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            disabled={importLoading}
+            onClick={openImportDialog}
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Import CSV
           </Button>
-        </Link>
+          <Link href="/admin/companies">
+            <Button variant="outline">
+              <Building2 className="h-4 w-4 mr-2" /> Company Profiles
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {error && (
@@ -302,6 +397,129 @@ export default function AdminUsersPage() {
         </Card>
       )}
 
+      {importResult && !importDialogOpen && (
+        <Card className="border-green-500/50 bg-green-500/10">
+          <CardContent className="p-4 space-y-2">
+            <p className="text-green-300 font-medium">
+              Import complete: {importResult.added} added, {importResult.skipped} skipped (existing email).
+            </p>
+            {importResult.temporaryPassword && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-white/80 text-sm">Temporary password for new users (share securely):</span>
+                <code className="px-2 py-1 bg-black/20 rounded text-sm font-mono">{importResult.temporaryPassword}</code>
+                <Button variant="ghost" size="sm" onClick={copyTempPassword} className="text-white/80 hover:text-white">
+                  <Copy className="h-4 w-4 mr-1" /> Copy
+                </Button>
+              </div>
+            )}
+            {importResult.errors && importResult.errors.length > 0 && (
+              <ul className="text-amber-300 text-sm list-disc list-inside mt-2">
+                {importResult.errors.slice(0, 10).map((err, i) => (
+                  <li key={i}>{err}</li>
+                ))}
+                {importResult.errors.length > 10 && (
+                  <li>… and {importResult.errors.length - 10} more</li>
+                )}
+              </ul>
+            )}
+            <Button variant="ghost" size="sm" className="text-white/60" onClick={() => setImportResult(null)}>
+              Dismiss
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="max-w-md border-white/20 bg-[#181818] text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Import users from CSV</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-white/60">Expected columns (first row = header):</p>
+          <ul className="text-sm text-white/80 list-disc list-inside space-y-0.5">
+            <li><strong>email</strong></li>
+            <li><strong>name</strong></li>
+            <li><strong>role</strong></li>
+            <li><strong>company</strong></li>
+          </ul>
+          {!importResult ? (
+            <>
+              <input
+                ref={csvInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="sr-only"
+                onChange={(e) => onImportFileSelect(e.target.files?.[0] ?? null)}
+                aria-label="Select CSV file"
+              />
+              <div
+                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                  importDragOver ? 'border-blue-400 bg-blue-500/10' : 'border-white/30 bg-white/5'
+                }`}
+                onDragOver={(e) => { e.preventDefault(); setImportDragOver(true) }}
+                onDragLeave={() => setImportDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setImportDragOver(false)
+                  const file = e.dataTransfer.files?.[0]
+                  onImportFileSelect(file ?? null)
+                }}
+                onClick={() => csvInputRef.current?.click()}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); csvInputRef.current?.click() } }}
+                aria-label="Drop CSV file or click to browse"
+              >
+                {importFile ? (
+                  <p className="text-white font-medium">{importFile.name}</p>
+                ) : (
+                  <>
+                    <Upload className="h-10 w-10 mx-auto text-white/50 mb-2" />
+                    <p className="text-white/80">Drop your CSV here or click to browse</p>
+                  </>
+                )}
+              </div>
+              {importFile && (
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" size="sm" onClick={() => setImportFile(null)}>
+                    Clear
+                  </Button>
+                  <Button size="sm" disabled={importLoading} onClick={() => handleImportCSV(importFile)}>
+                    {importLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Import
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-green-300 font-medium">
+                {importResult.added} added, {importResult.skipped} skipped (existing email).
+              </p>
+              {importResult.temporaryPassword && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-white/80 text-sm">Temporary password (share securely):</span>
+                  <code className="px-2 py-1 bg-black/20 rounded text-sm font-mono">{importResult.temporaryPassword}</code>
+                  <Button variant="ghost" size="sm" onClick={copyTempPassword} className="text-white/80 hover:text-white">
+                    <Copy className="h-4 w-4 mr-1" /> Copy
+                  </Button>
+                </div>
+              )}
+              {importResult.errors && importResult.errors.length > 0 && (
+                <ul className="text-amber-300 text-sm list-disc list-inside">
+                  {importResult.errors.slice(0, 5).map((err, i) => (
+                    <li key={i}>{err}</li>
+                  ))}
+                  {importResult.errors.length > 5 && <li>… and {importResult.errors.length - 5} more</li>}
+                </ul>
+              )}
+              <Button className="w-full" onClick={() => { setImportResult(null); setImportDialogOpen(false) }}>
+                Done
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -316,7 +534,7 @@ export default function AdminUsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user) => {
+              {sortedUsers.map((user) => {
                 const currentRole = (user.role?.trim() && ROLES.includes(user.role as Role))
                   ? (user.role as Role)
                   : 'Distributor'

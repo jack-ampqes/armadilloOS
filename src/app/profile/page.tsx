@@ -91,6 +91,13 @@ function ProfilePageContent() {
   const [zoom, setZoom] = useState(1)
   const [shopifyOpen, setShopifyOpen] = useState(false)
   const [quickbooksOpen, setQuickbooksOpen] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState(false)
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
@@ -273,6 +280,44 @@ function ProfilePageContent() {
       setError(err.message || 'Failed to update profile')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleChangePassword = async () => {
+    setPasswordError('')
+    setPasswordSuccess(false)
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match')
+      return
+    }
+    setPasswordSaving(true)
+    try {
+      const res = await fetch('/api/profile/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setPasswordError(data?.error || 'Failed to change password')
+        return
+      }
+      setPasswordSuccess(true)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setTimeout(() => { setPasswordDialogOpen(false); setPasswordSuccess(false) }, 1500)
+    } catch {
+      setPasswordError('Failed to change password')
+    } finally {
+      setPasswordSaving(false)
     }
   }
 
@@ -486,15 +531,15 @@ function ProfilePageContent() {
                 >
                   <Image
                     src={
-                      (profile.companies?.logo_url || profile.avatar_url)
-                        ? `${profile.companies?.logo_url || profile.avatar_url}${(profile.companies?.logo_url || profile.avatar_url || '').includes('?') ? '&' : '?'}t=${profile.updated_at || ''}`
+                      (profile.avatar_url || profile.companies?.logo_url)
+                        ? `${profile.avatar_url || profile.companies?.logo_url}${(profile.avatar_url || profile.companies?.logo_url || '').includes('?') ? '&' : '?'}t=${profile.updated_at || ''}`
                         : '/armadilloProfile.png'
                     }
                     alt="Profile"
                     width={64}
                     height={64}
                     className="object-cover w-full h-full"
-                    unoptimized={!!(profile.companies?.logo_url || profile.avatar_url)}
+                    unoptimized={!!(profile.avatar_url || profile.companies?.logo_url)}
                   />
                   {avatarUploading ? (
                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
@@ -576,16 +621,7 @@ function ProfilePageContent() {
               )}
             </div>
 
-            <div>
-              <Label className="text-white">Role</Label>
-              <div className="mt-1">
-                <Badge variant={getRoleBadgeVariant(profile.role)}>
-                  {profile.role || 'user'}
-                </Badge>
-              </div>
-            </div>
-
-            <div className="flex justify-left space-x-3 pt-2">
+            <div className="flex justify-left flex-wrap gap-2 pt-2">
               {editing ? (
                 <>
                   <Button
@@ -607,13 +643,29 @@ function ProfilePageContent() {
                   </Button>
                 </>
               ) : (
-                <Button
-                  onClick={() => setEditing(true)}
-                  className="bg-white text-[#181818] hover:bg-white/90"
-                >
-                  <Edit2 className="w-4 h-4 mr-2" />
-                  Edit Profile
-                </Button>
+                <>
+                  <Button
+                    onClick={() => setEditing(true)}
+                    className="bg-white text-[#181818] hover:bg-white/60 border-none"
+                  >
+                    <Edit2 className="w-4 h-4 mr-2" />
+                    Edit Profile
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setPasswordDialogOpen(true)
+                      setCurrentPassword('')
+                      setNewPassword('')
+                      setConfirmPassword('')
+                      setPasswordError('')
+                      setPasswordSuccess(false)
+                    }}
+                    className="text-white hover:bg-white/20 border-none bg-white/10"
+                  >
+                    Change password
+                  </Button>
+                </>
               )}
             </div>
 
@@ -756,6 +808,75 @@ function ProfilePageContent() {
             </>
           )}
         </Card>
+
+        <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+          <DialogContent className="max-w-md border-white/20 bg-[#181818] text-white p-6 text-base">
+            <DialogHeader>
+              <DialogTitle className="text-white text-xl">Change password</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
+              <div>
+                <Label htmlFor="current-password" className="text-white/80 text-base">Current password</Label>
+                <Input
+                  id="current-password"
+                  type="password"
+                  placeholder="Current password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/40 mt-1.5 text-base h-11"
+                  autoComplete="current-password"
+                />
+              </div>
+              <div>
+                <Label htmlFor="new-password" className="text-white/80 text-base">New password (min 6 characters)</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  placeholder="New password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/40 mt-1.5 text-base h-11"
+                  autoComplete="new-password"
+                />
+              </div>
+              <div>
+                <Label htmlFor="confirm-password" className="text-white/80 text-base">Confirm new password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/40 mt-1.5 text-base h-11"
+                  autoComplete="new-password"
+                />
+              </div>
+              {passwordError && (
+                <p className="text-red-400 text-base">{passwordError}</p>
+              )}
+              {passwordSuccess && (
+                <p className="text-green-400 text-base">Password updated successfully.</p>
+              )}
+              <DialogFooter className="gap-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setPasswordDialogOpen(false)}
+                  className="border-white/20 text-white hover:bg-white/10 text-base px-5 py-2"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleChangePassword}
+                  disabled={passwordSaving || !currentPassword || !newPassword || !confirmPassword}
+                  className="bg-white text-[#181818] hover:bg-white/90 text-base px-5 py-2"
+                >
+                  {passwordSaving ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
+                  {passwordSaving ? 'Updating...' : 'Change password'}
+                </Button>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

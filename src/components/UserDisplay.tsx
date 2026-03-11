@@ -9,13 +9,13 @@ export interface CompanyRef {
   logo_url?: string | null
 }
 
-/** Display photo URL: company logo if set, else user avatar. */
+/** Display photo URL: user's own avatar if set, else company logo (shared default). */
 export function getDisplayPhotoUrl(
   avatarUrl: string | null | undefined,
   companyLogoUrl: string | null | undefined
 ): string | null {
-  if (companyLogoUrl) return companyLogoUrl
-  return avatarUrl ?? null
+  if (avatarUrl) return avatarUrl
+  return companyLogoUrl ?? null
 }
 
 interface UserDisplayProps {
