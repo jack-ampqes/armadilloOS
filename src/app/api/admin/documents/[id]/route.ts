@@ -3,6 +3,8 @@ import { requireAdmin } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
 
 const BUCKET = 'documents'
+const MAX_SIZE_BYTES = 20 * 1024 * 1024 // 20MB
+const ALLOWED_TYPES = ['application/pdf']
 const SIGNED_URL_EXPIRY_SEC = 3600 // 1 hour
 
 /** GET /api/admin/documents/[id] — get document metadata and a signed view URL (Admin only). */
@@ -144,6 +146,102 @@ export async function PATCH(
     console.error('Admin document patch error:', error)
     return NextResponse.json(
       { error: 'Failed to update document' },
+      { status: 500 }
+    )
+  }
+}
+
+/** PUT /api/admin/documents/[id] — replace PDF file for a document (Admin only). */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = requireAdmin(request)
+  if ('response' in auth) {
+    return auth.response
+  }
+
+  try {
+    const { id } = await params
+
+    const formData = await request.formData()
+    const file = formData.get('file') as File | null
+    if (!file || !(file instanceof File)) {
+      return NextResponse.json(
+        { error: 'No file provided. Use form field "file".' },
+        { status: 400 }
+      )
+    }
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        { error: 'Invalid file type. Only PDF is allowed.' },
+        { status: 400 }
+      )
+    }
+
+    if (file.size > MAX_SIZE_BYTES) {
+      return NextResponse.json(
+        { error: 'File must be 20MB or smaller.' },
+        { status: 400 }
+      )
+    }
+
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('documents')
+      .select('id, storage_path')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !existing) {
+      return NextResponse.json(
+        { error: 'Document not found' },
+        { status: 404 }
+      )
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer())
+
+    const uploadResult = await supabaseAdmin.storage
+      .from(BUCKET)
+      .upload(existing.storage_path, buffer, {
+        contentType: file.type,
+        upsert: true,
+      })
+
+    if (uploadResult.error) {
+      console.error('Document replace upload error:', uploadResult.error)
+      return NextResponse.json(
+        { error: uploadResult.error.message || 'Failed to upload new PDF' },
+        { status: 500 }
+      )
+    }
+
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from('documents')
+      .update({
+        name: file.name,
+        file_size: file.size,
+        content_type: file.type,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('id, name, title, file_size, content_type, created_at, thumbnail_path')
+      .single()
+
+    if (updateError || !updated) {
+      console.error('Document replace update error:', updateError)
+      return NextResponse.json(
+        { error: updateError?.message || 'Failed to update document record' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json(updated)
+  } catch (error) {
+    console.error('Admin document replace error:', error)
+    return NextResponse.json(
+      { error: 'Failed to replace document' },
       { status: 500 }
     )
   }

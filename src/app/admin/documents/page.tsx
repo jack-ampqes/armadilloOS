@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import 'react-easy-crop/react-easy-crop.css'
-import { FileStack, Loader2, AlertCircle, Upload, Trash2, FileText, Eye, X, ImagePlus } from 'lucide-react'
+import { FileStack, FilePlusCorner, Loader2, AlertCircle, Upload, Trash2, FileText, Eye, X, ImagePlus } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -42,6 +42,7 @@ export default function AdminDocumentsPage() {
   const [viewUrl, setViewUrl] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [thumbnailUploadingId, setThumbnailUploadingId] = useState<string | null>(null)
+  const [pdfReplacingId, setPdfReplacingId] = useState<string | null>(null)
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null)
   const [editTitleValue, setEditTitleValue] = useState('')
   const [thumbnailCropOpen, setThumbnailCropOpen] = useState(false)
@@ -52,6 +53,7 @@ export default function AdminDocumentsPage() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const thumbnailInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const pdfInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const isAdmin = role === 'Admin'
   const roleKnown = role !== null
@@ -170,6 +172,49 @@ export default function AdminDocumentsPage() {
     openThumbnailCropper(docId, e)
   }
 
+  const handlePdfReplace = async (docId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.type !== 'application/pdf') {
+      setUploadError('Only PDF files are allowed.')
+      e.target.value = ''
+      return
+    }
+    setPdfReplacingId(docId)
+    setUploadError(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`/api/admin/documents/${docId}`, {
+        method: 'PUT',
+        body: formData,
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setDocuments((prev) =>
+          prev.map((d) =>
+            d.id === docId
+              ? {
+                  ...d,
+                  name: data.name ?? d.name,
+                  title: data.title ?? d.title,
+                  file_size: data.file_size ?? d.file_size,
+                  content_type: data.content_type ?? d.content_type,
+                }
+              : d
+          )
+        )
+      } else {
+        setUploadError(typeof data?.error === 'string' ? data.error : 'Failed to replace PDF')
+      }
+    } catch {
+      setUploadError('Failed to replace PDF')
+    } finally {
+      setPdfReplacingId(null)
+      e.target.value = ''
+    }
+  }
+
   const saveTitle = async (docId: string) => {
     const value = editTitleValue.trim()
     setEditingTitleId(null)
@@ -255,9 +300,6 @@ export default function AdminDocumentsPage() {
           <FileStack className="h-8 w-8 text-white/80" />
           Documents
         </h1>
-        <p className="mt-2 text-white/60">
-          Store and view PDF documents. Only admin users can access this area.
-        </p>
       </div>
 
       {/* Upload */}
@@ -337,19 +379,42 @@ export default function AdminDocumentsPage() {
                   className="hidden"
                   id={`thumb-${doc.id}`}
                 />
-                <label
-                  htmlFor={`thumb-${doc.id}`}
-                  className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                >
+                <input
+                  ref={(el) => {
+                    pdfInputRefs.current[doc.id] = el
+                  }}
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => handlePdfReplace(doc.id, e)}
+                  className="hidden"
+                  id={`pdf-${doc.id}`}
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
                   {thumbnailUploadingId === doc.id ? (
                     <Loader2 className="h-8 w-8 animate-spin text-white" />
                   ) : (
-                    <span className="flex items-center gap-2 rounded-lg bg-white/20 px-3 py-2 text-sm text-white">
-                      <ImagePlus className="h-4 w-4" />
-                      {doc.thumbnail_path ? 'Change' : 'Add'} thumbnail
-                    </span>
+                    <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-white">
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 px-2 py-1 rounded bg-white/20 hover:bg-white/30 transition-colors"
+                        onClick={() => thumbnailInputRefs.current[doc.id]?.click()}
+                      >
+                        <ImagePlus className="h-6 w-6" />
+                      </button>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 px-2 py-1 rounded bg-white/10 hover:bg-white/20 transition-colors"
+                        onClick={() => pdfInputRefs.current[doc.id]?.click()}
+                      >
+                        {pdfReplacingId === doc.id ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <FilePlusCorner className="h-6 w-6" />
+                        )}
+                      </button>
+                    </div>
                   )}
-                </label>
+                </div>
               </div>
               <CardContent className="p-4 flex-1 flex flex-col">
                 {/* Title */}

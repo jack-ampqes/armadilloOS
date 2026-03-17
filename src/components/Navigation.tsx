@@ -247,7 +247,7 @@ export default function Navigation() {
                     transition={{ delay: index * 0.05 }}
                     className={cn(
                       'relative flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200',
-                      isActive ? 'border border-white text-white' : 'text-white/70 hover:bg-white/10',
+                      isActive ? 'border-none bg-white/10 text-white' : 'text-white/70 hover:bg-white/20',
                       isAlerts && unreadAlertsCount > 0 ? 'bg-red-500/20' : null
                     )}
                   >
