@@ -1,11 +1,24 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Cropper from 'react-easy-crop'
+import type { Area } from 'react-easy-crop'
+import 'react-easy-crop/react-easy-crop.css'
 import { FileStack, Loader2, AlertCircle, Upload, Trash2, FileText, Eye, X, ImagePlus } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { getCroppedImg } from '@/lib/crop-image'
 import { usePermissions } from '@/lib/usePermissions'
+
+const THUMBNAIL_ASPECT = 4 / 3
 
 interface DocumentRow {
   id: string
@@ -31,6 +44,12 @@ export default function AdminDocumentsPage() {
   const [thumbnailUploadingId, setThumbnailUploadingId] = useState<string | null>(null)
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null)
   const [editTitleValue, setEditTitleValue] = useState('')
+  const [thumbnailCropOpen, setThumbnailCropOpen] = useState(false)
+  const [thumbnailCropSrc, setThumbnailCropSrc] = useState<string | null>(null)
+  const [thumbnailCropDocId, setThumbnailCropDocId] = useState<string | null>(null)
+  const [crop, setCrop] = useState({ x: 0, y: 0 })
+  const [zoom, setZoom] = useState(1)
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const thumbnailInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
@@ -94,31 +113,61 @@ export default function AdminDocumentsPage() {
     }
   }
 
-  const handleThumbnailUpload = async (docId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+  const onThumbnailCropComplete = useCallback((_: Area, pixels: Area) => {
+    setCroppedAreaPixels(pixels)
+  }, [])
+
+  const openThumbnailCropper = (docId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/')) {
-      return
-    }
-    setThumbnailUploadingId(docId)
+    if (!file.type.startsWith('image/')) return
+    setCroppedAreaPixels(null)
+    setCrop({ x: 0, y: 0 })
+    setZoom(1)
+    setThumbnailCropDocId(docId)
+    setThumbnailCropSrc(URL.createObjectURL(file))
+    setThumbnailCropOpen(true)
+    e.target.value = ''
+  }
+
+  const closeThumbnailCropper = useCallback(() => {
+    if (thumbnailCropSrc) URL.revokeObjectURL(thumbnailCropSrc)
+    setThumbnailCropOpen(false)
+    setThumbnailCropSrc(null)
+    setThumbnailCropDocId(null)
+    setCroppedAreaPixels(null)
+  }, [thumbnailCropSrc])
+
+  const handleThumbnailCropConfirm = async () => {
+    if (!thumbnailCropSrc || !thumbnailCropDocId || !croppedAreaPixels) return
+    setThumbnailUploadingId(thumbnailCropDocId)
     try {
+      const blob = await getCroppedImg(thumbnailCropSrc, croppedAreaPixels)
+      const file = new File([blob], 'thumbnail.jpg', { type: 'image/jpeg' })
       const formData = new FormData()
       formData.append('thumbnail', file)
-      const res = await fetch(`/api/admin/documents/${docId}/thumbnail`, {
+      const res = await fetch(`/api/admin/documents/${thumbnailCropDocId}/thumbnail`, {
         method: 'POST',
         body: formData,
       })
       const data = await res.json()
       if (res.ok) {
         setDocuments((prev) =>
-          prev.map((d) => (d.id === docId ? { ...d, thumbnail_path: data.thumbnail_path } : d))
+          prev.map((d) =>
+            d.id === thumbnailCropDocId ? { ...d, thumbnail_path: data.thumbnail_path } : d
+          )
         )
+        closeThumbnailCropper()
       }
     } finally {
       setThumbnailUploadingId(null)
-      const input = thumbnailInputRefs.current[docId]
+      const input = thumbnailCropDocId && thumbnailInputRefs.current[thumbnailCropDocId]
       if (input) input.value = ''
     }
+  }
+
+  const handleThumbnailUpload = (docId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    openThumbnailCropper(docId, e)
   }
 
   const saveTitle = async (docId: string) => {
@@ -363,6 +412,63 @@ export default function AdminDocumentsPage() {
           ))}
         </div>
       )}
+
+      {/* Thumbnail crop dialog — enforces 4:3 aspect ratio */}
+      <Dialog open={thumbnailCropOpen} onOpenChange={(open) => !open && closeThumbnailCropper()}>
+        <DialogContent className="max-w-lg bg-[#1f1f1f] border-white/20 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Crop thumbnail (4:3)</DialogTitle>
+          </DialogHeader>
+          <div className="relative h-[min(60vmin,320px)] w-full bg-black/40 rounded-lg overflow-hidden">
+            {thumbnailCropSrc && (
+              <Cropper
+                image={thumbnailCropSrc}
+                crop={crop}
+                zoom={zoom}
+                aspect={THUMBNAIL_ASPECT}
+                cropShape="rect"
+                showGrid={false}
+                minZoom={1}
+                maxZoom={3}
+                zoomSpeed={1}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={onThumbnailCropComplete}
+                onCropAreaChange={onThumbnailCropComplete}
+                style={{
+                  containerStyle: { backgroundColor: 'transparent' },
+                  cropAreaStyle: { border: '2px solid rgba(255,255,255,0.6)' },
+                }}
+                classes={{ containerClassName: 'bg-transparent' }}
+                restrictPosition={true}
+              />
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={closeThumbnailCropper}
+              className="border-white/20 text-white hover:bg-white/10"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleThumbnailCropConfirm}
+              disabled={thumbnailUploadingId !== null || !croppedAreaPixels}
+              className="bg-white text-[#181818] hover:bg-white/90"
+            >
+              {thumbnailUploadingId ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Uploading…
+                </>
+              ) : (
+                'Use thumbnail'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Embedded PDF viewer modal */}
       {viewingId && (
