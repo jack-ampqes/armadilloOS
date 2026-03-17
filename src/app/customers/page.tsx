@@ -72,9 +72,6 @@ export default function CustomersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white">Customers</h1>
-          <p className="mt-2 text-white/60">
-            Manage customer information and contact details.
-          </p>
         </div>
         <Button asChild className="self-start sm:self-auto">
           <Link href="/customers/new" title="Add Customer">

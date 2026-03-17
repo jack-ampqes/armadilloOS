@@ -64,9 +64,6 @@ export default function DistributorsListPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white">Distributors</h1>
-          <p className="mt-2 text-white/60">
-            Manage distributors and partnership agreements.
-          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild>

@@ -355,9 +355,6 @@ export default function AdminUsersPage() {
             <ShieldUser className="h-8 w-8 text-white/80" />
             Users & roles
           </h1>
-          <p className="mt-1 text-sm text-white/50">
-            Import CSV: columns <strong>email</strong> (required), <strong>name</strong>, <strong>role</strong>, <strong>company</strong> (company name).
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button

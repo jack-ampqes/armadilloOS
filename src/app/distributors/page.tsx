@@ -245,9 +245,6 @@ function DistributorsPageContent() {
         <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 px-6 py-6 border-1 border-white/10">
         <div>
           <h1 className="text-3xl font-bold text-white">Distributors</h1>
-          <p className="mt-2 text-white/60 text-sm">
-            Pins are placed from each distributor&apos;s address. Edit a distributor to update their location.
-          </p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -278,9 +275,6 @@ function DistributorsPageContent() {
               <Building className="h-5 w-5" />
               Distributors
             </h2>
-            <p className="text-xs text-white/60 mb-2">
-              Pins from address. Click the circle to change marker color.
-            </p>
             {colorPickerDistId && (
               <div className="mb-3 p-3 rounded-lg bg-white/10 border border-white/20">
                 <p className="text-xs text-white/80 mb-2">

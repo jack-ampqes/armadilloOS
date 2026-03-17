@@ -223,9 +223,6 @@ export default function SalesRepsPage() {
       <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 px-6 py-6 border-1 border-white/10">
         <div>
           <h1 className="text-3xl font-bold text-white">Sales Reps & Regions</h1>
-          <p className="mt-2 text-white/60 text-sm">
-            Assign states to reps and set region colors on the map.
-          </p>
         </div>
         <Button asChild className="self-start sm:self-auto">
           <Link href="/sales-reps/new" title="Add Sales Rep">
@@ -241,9 +238,6 @@ export default function SalesRepsPage() {
               <User className="h-5 w-5" />
               Sales reps
             </h2>
-            <p className="text-xs text-white/60 mb-2">
-              Select a rep to view their territory. Click the circle to change color.
-            </p>
             {colorPickerRepId && (
               <div className="mb-3 p-3 rounded-lg bg-white/10 border border-white/20">
                 <p className="text-xs text-white/80 mb-2">

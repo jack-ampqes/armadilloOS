@@ -389,28 +389,36 @@ export default function AdminDocumentsPage() {
                   className="hidden"
                   id={`pdf-${doc.id}`}
                 />
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
                   {thumbnailUploadingId === doc.id ? (
                     <Loader2 className="h-8 w-8 animate-spin text-white" />
                   ) : (
                     <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-white">
                       <button
                         type="button"
-                        className="flex items-center gap-1 px-2 py-1 rounded bg-white/20 hover:bg-white/30 transition-colors"
+                        className="flex items-center gap-1 px-2 py-1 rounded bg-black/30 hover:bg-black/60 transition-colors"
                         onClick={() => thumbnailInputRefs.current[doc.id]?.click()}
                       >
-                        <ImagePlus className="h-6 w-6" />
+                        <ImagePlus className="h-7 w-7" />
                       </button>
                       <button
                         type="button"
-                        className="flex items-center gap-1 px-2 py-1 rounded bg-white/10 hover:bg-white/20 transition-colors"
+                        className="flex items-center gap-1 px-2 py-1 rounded bg-black/30 hover:bg-black/60 transition-colors"
                         onClick={() => pdfInputRefs.current[doc.id]?.click()}
                       >
                         {pdfReplacingId === doc.id ? (
                           <Loader2 className="h-5 w-5 animate-spin" />
                         ) : (
-                          <FilePlusCorner className="h-6 w-6" />
+                          <FilePlusCorner className="h-7 w-7" />
                         )}
+                      </button>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 px-2 py-1 rounded bg-black/30 hover:bg-black/60 transition-colors"
+                        onClick={() => openDocument(doc.id)}
+                        aria-label="Open document"
+                      >
+                        <Eye className="h-7 w-7" />
                       </button>
                     </div>
                   )}
