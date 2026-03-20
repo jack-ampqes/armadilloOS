@@ -136,6 +136,7 @@ export default function ManufacturerOrdersPage() {
 
   // Loading state for "Add to inventory" button per order
   const [applyingOrderId, setApplyingOrderId] = useState<string | null>(null)
+  const [selectedPastOrder, setSelectedPastOrder] = useState<ManufacturerOrder | null>(null)
 
   // Dynamic color theming based on manufacturer logo
   const selectedLogoUrl = selectedManufacturer ? getManufacturerLogo(selectedManufacturer.name) : null
@@ -1185,7 +1186,8 @@ export default function ManufacturerOrdersPage() {
               {pastOrders.map(order => (
                 <Card 
                   key={order.id} 
-                  className="hover:bg-white/5 transition-colors opacity-75"
+                  className="hover:bg-white/5 transition-colors opacity-75 cursor-pointer"
+                  onClick={() => setSelectedPastOrder(order)}
                 >
                   <CardContent className="p-6">
                     <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -1202,7 +1204,10 @@ export default function ManufacturerOrdersPage() {
                               variant="outline"
                               className="gap-1.5"
                               disabled={applyingOrderId === order.id}
-                              onClick={() => applyOrderToInventory(order)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                applyOrderToInventory(order)
+                              }}
                               style={colorVariants ? { borderColor: colorVariants.border } : undefined}
                             >
                               {applyingOrderId === order.id ? (
@@ -1281,6 +1286,126 @@ export default function ManufacturerOrdersPage() {
             </div>
           )}
         </div>
+        
+        {/* Past Order Details Modal */}
+        {selectedPastOrder && (
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setSelectedPastOrder(null)}
+          >
+            <Card
+              className="w-full max-w-3xl border border-white/10 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h3 className="text-xl font-bold text-white">{selectedPastOrder.order_number}</h3>
+                    <p className="text-sm text-white/60 mt-1">
+                      {selectedManufacturer.name}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSelectedPastOrder(null)}
+                  >
+                    <X className="h-5 w-5" />
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                  <div className="rounded-lg border border-white/10 p-4">
+                    <p className="text-xs text-white/50">Status</p>
+                    <div className="mt-2">
+                      <Badge variant={getStatusVariant(getDisplayStatus(selectedPastOrder))} className="flex w-fit items-center gap-1">
+                        {getStatusIcon(getDisplayStatus(selectedPastOrder))}
+                        {getDisplayStatus(selectedPastOrder) === 'received' ? 'Received' : 'Cancelled'}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-white/10 p-4">
+                    <p className="text-xs text-white/50">Total</p>
+                    <p className="text-xl font-bold text-white mt-1">
+                      ${Number(selectedPastOrder.total_amount || 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-white/10 p-4">
+                    <p className="text-xs text-white/50">Ordered</p>
+                    <p className="text-white mt-1">
+                      {new Date(selectedPastOrder.order_date).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-white/10 p-4">
+                    <p className="text-xs text-white/50">Delivered</p>
+                    <p className="text-white mt-1">
+                      {selectedPastOrder.actual_delivery
+                        ? new Date(selectedPastOrder.actual_delivery).toLocaleDateString()
+                        : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedPastOrder.tracking_number && (
+                  <div className="mb-6 rounded-lg border border-white/10 p-4">
+                    <p className="text-xs text-white/50 mb-2">Tracking</p>
+                    <div className="flex items-center gap-2 text-white/80">
+                      <Truck className="h-4 w-4" />
+                      {(() => {
+                        const url = getEffectiveTrackingUrl(
+                          selectedPastOrder.tracking_url,
+                          selectedPastOrder.carrier,
+                          selectedPastOrder.tracking_number
+                        )
+                        return url ? (
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 font-mono text-sm hover:opacity-80 transition-opacity"
+                            style={{ color: colorVariants?.base || '#60a5fa' }}
+                          >
+                            {selectedPastOrder.tracking_number}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : (
+                          <span className="font-mono text-sm">{selectedPastOrder.tracking_number}</span>
+                        )
+                      })()}
+                      {selectedPastOrder.carrier && (
+                        <span className="text-white/40 text-sm">({selectedPastOrder.carrier})</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-lg border border-white/10 p-4">
+                  <p className="text-sm text-white/60 mb-3">Order Items</p>
+                  {selectedPastOrder.items.length === 0 ? (
+                    <p className="text-white/50 text-sm">No items found for this order.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedPastOrder.items.map((item) => (
+                        <div key={item.id} className="flex items-start justify-between gap-4 text-sm">
+                          <div>
+                            <p className="text-white">
+                              {item.quantity_ordered}x {item.product_name}
+                            </p>
+                            <p className="text-white/40">{item.sku}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-white">${Number(item.total_cost || 0).toFixed(2)}</p>
+                            <p className="text-white/40">${Number(item.unit_cost || 0).toFixed(2)} each</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     )
   }

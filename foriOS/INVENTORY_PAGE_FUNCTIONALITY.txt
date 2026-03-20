@@ -1,0 +1,494 @@
+================================================================================
+Inventory Page Functionality (iOS spec companion)
+================================================================================
+Target UI: the Inventory list page at `src/app/inventory/page.tsx` (route `/inventory`)
+
+This document focuses on the LIST PAGE behaviors: loading, permissions, search,
+sorting, filtering, infinite-scroll pagination, row navigation, stock adjustment,
+tooltips, and the inventory-history dialog.
+
+--------------------------------------------------------------------------------
+1. Entry / High-level Behavior
+--------------------------------------------------------------------------------
+When the Inventory page loads:
+- It immediately fetches the full inventory dataset by calling `GET /api/inventory`.
+- It stores the raw dataset in memory (`allProducts`).
+- It computes what to show (`displayedProducts`) based on:
+  - Search query (`searchQuery`)
+  - Filter mode (`filter`): all / low-stock / out-of-stock
+  - Sort column (`sortBy`): name / sku / price / stock
+  - Sort direction (`sortOrder`): asc / desc
+  - Pagination / infinite scroll state (`page`)
+- It renders a table with one row per displayed product.
+
+The component is declared as a client component: `'use client'`.
+
+--------------------------------------------------------------------------------
+2. State Model (what the page tracks)
+--------------------------------------------------------------------------------
+Key React state variables:
+- `allProducts: Product[]`
+  - The complete inventory list fetched from the backend.
+- `displayedProducts: Product[]`
+  - The subset currently visible in the table (based on search/filter/sort/page).
+- `loading: boolean`
+  - True until the initial `GET /api/inventory` completes.
+- `loadingMore: boolean`
+  - True while infinite-scroll is extending the visible subset.
+- `searchQuery: string`
+  - Free-text search input.
+- `filter: 'all' | 'low-stock' | 'out-of-stock'`
+  - Inventory classification filter.
+- `sortBy: 'sku' | 'name' | 'price' | 'stock'`
+  - Current sort field.
+- `sortOrder: 'asc' | 'desc'`
+  - Sort direction.
+- `page: number`
+  - The “page” index used by infinite scroll slicing.
+- Stock adjustment modal state:
+  - `stockDialogOpen: boolean`
+  - `selectedProduct: Product | null`
+  - `quantityInput: string` (user enters a number; later parsed as int)
+  - `updatingStock: boolean` (POST in-flight)
+  - `popupPosition: { x: number; y: number }` (positions the popup near clicked cell)
+- Hover tooltip state:
+  - `hoveredProduct: Product | null`
+  - `tooltipPosition: { x: number; y: number }`
+- Inventory history dialog:
+  - `historyOpen: boolean`
+  - `historyLoading: boolean`
+  - `history: InventoryHistoryEntry[]`
+
+Pagination constant:
+- `PRODUCTS_PER_PAGE = 50`
+
+--------------------------------------------------------------------------------
+3. Permissions / Feature Gating
+--------------------------------------------------------------------------------
+The page uses `usePermissions()` and the helper `hasPermission(...)` to gate UI and actions.
+
+Permissions referenced by this page:
+- `InventoryViewing`
+  - Shows:
+    - “Inventory History” button
+    - “Refresh inventory” button
+  - Also controls whether stock editing is possible via other interactions.
+- `InventoryEditing`
+  - Shows:
+    - Floating “+” button linking to `/inventory/new`
+    - Stock quantity click-to-adjust popup (in-table)
+    - Pencil “Edit” icon per row linking to `/inventory/[id]/edit`
+  - Also closes/rejects stock adjustments client-side if permission is missing.
+- `ManufacturerOrders`
+  - Shows:
+    - “Manufacturer Orders” button linking to `/inventory/manufacturer-orders`
+
+Important UI behavior coupling:
+- Row click always navigates to `/inventory/[id]`.
+- But the stock quantity cell click (the number) only opens the adjustment popup if `hasPermission('InventoryEditing')` is true.
+
+--------------------------------------------------------------------------------
+4. Data Fetch: GET /api/inventory
+--------------------------------------------------------------------------------
+Initial fetch:
+- Trigger: `useEffect(() => { fetchProducts() }, [])`
+- Request: `fetch('/api/inventory')`
+
+Expected response shape (as used by the page):
+- The backend returns: `{ inventory: [...] }`
+- Each inventory item is expected to contain:
+  - `sku`
+  - `quantity`
+  - `min_stock`
+  - `location`
+  - `updated_at` (or `updatedAt`)
+  - `product` object with product metadata (at least `name`, plus optional `description`, `price`, `color`, `leadtime`)
+
+Client-side transform:
+- The page maps `inventoryData.inventory[]` into its internal `Product` model:
+  - `id = item.sku`
+  - `name = product.name || item.name || 'Unknown Product'`
+  - `description = product.description`
+  - `sku = item.sku`
+  - `price = parseFloat(product.price) (fallbacks to item.price or 0)`
+  - `color = product.color || item.color`
+  - `leadtime = product.leadtime || item.leadtime`
+  - `inventory = { quantity, minStock, location, lastUpdated }`
+  - `orderItems = []` (unused here)
+
+Sorting after load:
+- After `setAllProducts(transformedProducts)`, it computes a sorted list with `getSortedProducts(transformedProducts)` and shows the first 50.
+
+Error handling:
+- If the response is not `ok`, the page logs details and empties `allProducts` and `displayedProducts`.
+- If the request throws, it empties both arrays.
+
+--------------------------------------------------------------------------------
+5. Loading / Skeleton Rendering
+--------------------------------------------------------------------------------
+When `loading === true`:
+- The page returns a skeleton-only header area (centered circular skeleton).
+- No table is rendered yet.
+
+When `loadingMore === true`:
+- It shows a “Loading more products...” indicator at the bottom of the table list.
+
+--------------------------------------------------------------------------------
+6. Search (free text)
+--------------------------------------------------------------------------------
+Search UI:
+- An `<Input type="search">` with placeholder:
+  - “Search by name, SKU, color...”
+- The input updates `searchQuery` on change.
+- If `searchQuery` is non-empty, an “X” button appears to clear it.
+
+Search logic (`getFilteredProducts`):
+- It trims and lowercases the search query:
+  - `q = searchQuery.trim().toLowerCase()`
+- If `q` is non-empty, each product must match at least one of:
+  - `product.name` includes `q`
+  - `product.sku` includes `q`
+  - `product.description` includes `q`
+  - `product.color` includes `q`
+
+If search yields no results:
+- The table is replaced by an empty-state message (see section 12).
+
+--------------------------------------------------------------------------------
+7. Filter (All / Low Stock / Out of Stock)
+--------------------------------------------------------------------------------
+Filter UI:
+- A `<Select>` with:
+  - `all`
+  - `low-stock`
+  - `out-of-stock`
+
+Filter logic (`getFilteredProducts`):
+- `all`:
+  - Always returns products (subject to search).
+- `low-stock`:
+  - Includes products where:
+    - `quantity > 0`
+    - and `quantity <= minStock`
+- `out-of-stock`:
+  - Includes products where:
+    - `quantity === 0`
+
+--------------------------------------------------------------------------------
+8. Sorting (by name, sku, price, stock)
+--------------------------------------------------------------------------------
+Sort UI:
+- A `<Select>` for sort field:
+  - name, sku, price, stock
+- A `<Select>` for sort direction:
+  - asc, desc
+
+Sorting logic (`getSortedProducts`):
+- It sorts a copy of the provided products array.
+- Comparison by `sortBy`:
+  - `name`: `a.name.localeCompare(b.name)`
+  - `sku`: `a.sku.localeCompare(b.sku)`
+  - `price`: `a.price - b.price`
+  - `stock`: `(a.inventory.quantity || 0) - (b.inventory.quantity || 0)`
+- Direction:
+  - If `sortOrder === 'asc'`, keep comparison result.
+  - Else invert result for descending.
+
+Default:
+- `sortBy` initialized to `'sku'`
+- `sortOrder` initialized to `'asc'`
+
+--------------------------------------------------------------------------------
+9. Pagination / Infinite Scroll
+--------------------------------------------------------------------------------
+Mechanism:
+- The page listens to `window` scroll events.
+- It computes:
+  - `scrolledToBottom` when:
+    - `window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 500`
+- When scrolled near bottom and:
+  - not currently `loadingMore`
+  - and `hasMoreProducts()` is true
+  - it increments `page` by 1.
+
+How it decides if there’s more (`hasMoreProducts`):
+- It recomputes filtered+sorted list.
+- Returns true if:
+  - `displayedProducts.length < sorted.length`
+
+How it loads more (`loadMoreProducts`):
+- A `useEffect` watches `page`.
+- If `page > 1`, it slices:
+  - `nextProducts = sorted.slice(0, page * PRODUCTS_PER_PAGE)`
+- It uses a short `setTimeout(..., 300)` delay to show a smoother transition.
+
+Reset behavior:
+- Another `useEffect` resets pagination and recomputes the visible slice whenever:
+  - `filter`, `sortBy`, `sortOrder`, `searchQuery`, or `allProducts` change:
+    - it sets `page = 1`
+    - recomputes `displayedProducts = sorted.slice(0, PRODUCTS_PER_PAGE)`
+
+Bottom indicators:
+- If `loadingMore` shows, the loading indicator appears.
+- If `!hasMoreProducts()` and `displayedProducts.length > 0`, it shows:
+  - “End of list - All X products loaded”
+
+--------------------------------------------------------------------------------
+10. Table Rendering & Row Navigation
+--------------------------------------------------------------------------------
+Rendered columns (from the header + body):
+- `#` (line number)
+- `SKU`
+- `Product` (name)
+- `Stock`
+- `Status` (Badge: In Stock / Low Stock / Out of Stock)
+- `Price`
+- Actions (pencil icon or blank)
+
+Row click behavior:
+- Each `<TableRow>` has:
+  - `onClick={() => router.push(`/inventory/${product.id}`)}`
+- Therefore, clicking anywhere on the row navigates to the product detail route.
+
+Line number calculation:
+- The component recomputes `filtered` and `sorted` and then finds:
+  - `lineNumber = sorted.findIndex(p => p.id === product.id) + 1`
+
+This means `#` is always relative to the currently filtered+sorted order.
+
+Product name hover tooltip:
+- The Product cell has:
+  - `onMouseEnter` / `onMouseMove` / `onMouseLeave` wired to tooltip handlers.
+- It shows a truncated name with `truncate` and hover color change.
+
+Stock cell click vs row click:
+- The `Stock` cell contains a clickable quantity and also uses:
+  - `onClick` logic only when `InventoryEditing` permission is present.
+- If editing is not allowed:
+  - the quantity cell does not attach the stock click handler.
+
+Edit action icon:
+- If `hasPermission('InventoryEditing')`:
+  - The pencil icon links to `/inventory/${product.id}/edit`.
+- If not allowed:
+  - It renders a disabled “—” placeholder.
+- The action cell does `e.stopPropagation()` so clicking the pencil doesn’t trigger the row navigation.
+
+--------------------------------------------------------------------------------
+11. Stock Status Badge Logic
+--------------------------------------------------------------------------------
+The badge label is computed by `getStockStatus(product)`:
+- quantity === 0:
+  - status = `Out of Stock`
+- quantity > 0 and quantity <= minStock:
+  - status = `Low Stock`
+- else:
+  - status = `In Stock`
+
+Badge variant mapping:
+- Out of Stock => `variant = 'destructive'`
+- Low Stock => `variant = 'warning'`
+- In Stock => `variant = 'success'`
+
+Optional min stock display:
+- If `minStock` exists and is > 0, it shows:
+  - `(min: X)` only on large screens (`hidden xl:inline`)
+
+--------------------------------------------------------------------------------
+12. Empty States (No matching products)
+--------------------------------------------------------------------------------
+When:
+- `displayedProducts.length === 0`
+- and `!loading`
+
+It shows a message that depends on whether a search is active:
+- If `searchQuery.trim()` is truthy:
+  - “No products match your search”
+  - and “Try a different search term or clear the search.”
+- Else if `filter === 'all'`:
+  - “No products found”
+  - and: if InventoryEditing permission exists, it offers a “+ Add Product” button linking to `/inventory/new`.
+- Else:
+  - “No products with {filter}”
+  - and “Try a different filter.”
+
+--------------------------------------------------------------------------------
+13. Stock Adjustment Popup (InventoryEditing only)
+--------------------------------------------------------------------------------
+Trigger:
+- When InventoryEditing permission exists, the Stock quantity cell’s click handler calls:
+  - `handleStockClick(product, e)`
+
+Guard:
+- If `hasPermission('InventoryEditing')` is false, the popup does not open.
+
+Popup positioning:
+- It calculates popup coordinates from the clicked cell’s bounding rect:
+  - center-x alignment near the cell
+  - vertical position below the cell by ~8px
+- It then clamps to viewport with:
+  - popupWidth = 320
+  - popupHeight = 200
+- If it would overflow vertically, it flips to display above the cell.
+
+Popup contents:
+- Title: “Adjust Stock”
+- Shows:
+  - selected product name
+  - SKU (monospace)
+  - Current quantity
+- Includes a numeric input:
+  - input type `number`, min=1
+  - stored in `quantityInput`
+
+Operations:
+- Subtract (button labeled “Subtract” with Minus icon)
+  - only enabled when `quantityInput` parses to > 0
+  - calls `handleStockUpdate('subtract')`
+  - which uses `adjustment = -quantity`
+- Add (button labeled “Add” with Plus icon)
+  - calls `handleStockUpdate('add')`
+  - which uses `adjustment = quantity`
+
+Keyboard shortcuts inside popup:
+- If key is `Enter` and quantityInput is a valid > 0 integer:
+  - it performs the add operation.
+- If key is `Escape`:
+  - it closes the popup.
+
+Close behavior:
+- There is a full-screen backdrop div:
+  - `onClick={() => setStockDialogOpen(false)}`
+- The popup container itself stops click propagation so clicks inside don’t close it.
+
+Backend update:
+- POST request: `POST /api/inventory`
+- Request JSON body:
+  - `{ sku: selectedProduct.sku, quantity: adjustment }`
+
+After success:
+- It refreshes the inventory list by calling `fetchProducts()`.
+- It closes the stock dialog.
+- If the inventory history dialog is open, it refreshes history too (`fetchHistory()`).
+- It resets:
+  - `quantityInput = ''`
+  - `selectedProduct = null`
+
+Errors:
+- Non-`ok` response:
+  - it reads JSON error payload (if any) and throws an Error.
+- The page shows an `alert(error.message)` with a fallback “Failed to update stock”.
+
+--------------------------------------------------------------------------------
+14. Inventory History Dialog
+--------------------------------------------------------------------------------
+Entry point:
+- Button “Inventory History” appears only if `hasPermission('InventoryViewing')`.
+- It sets `historyOpen` to true.
+
+Dialog tech:
+- Uses `Dialog` / `DialogContent` from `@/components/ui/dialog`.
+- `Dialog` is controlled by:
+  - `open={historyOpen}`
+  - `onOpenChange={handleHistoryOpen}`
+
+Data fetch:
+- When opening (`historyOpen === true`), it calls `fetchHistory()`.
+- `fetchHistory()` calls:
+  - `GET /api/inventory/history?limit=200`
+- It expects JSON shape:
+  - `{ history: [...] }`
+- If request fails, `history` becomes `[]`.
+
+Dialog UI:
+- Title: “Inventory History”
+- Subtitle text explains it includes manual adjustments, manufacturer orders, scan adjustments.
+- It renders a table with columns:
+  - Date (created_at converted to local string)
+  - SKU
+  - Change (colored green for positive, red for negative; includes '+' for positive)
+  - Qty after (quantity_after)
+  - User (user_email or '—')
+
+History SKU hover tooltip:
+- When hovering a SKU cell, it calls:
+  - `handleHistorySkuHover(entry.sku, e)`
+- That finds the matching product in `allProducts` by SKU and sets it as `hoveredProduct`,
+  which reuses the global hover tooltip behavior (section 15).
+
+--------------------------------------------------------------------------------
+15. Hover Tooltip (Product & History SKU)
+--------------------------------------------------------------------------------
+Tooltip appears when `hoveredProduct` is set (non-null).
+
+Setters:
+- Product table “Product” column:
+  - `handleProductHover(product, e)` on mouse enter
+  - and `handleProductMouseMove(e)` on mouse move
+- History dialog SKU cells:
+  - `handleHistorySkuHover(entry.sku, e)` (it maps SKU to a product)
+
+Tooltip positioning and constraints:
+- Tooltip positions are computed from mouse/client coordinates:
+  - `tooltipPosition = { x: e.clientX + 12, y: e.clientY + 12 }`
+- It’s rendered with `fixed` positioning so it follows viewport.
+- It clamps inside viewport using:
+  - `left: min(tooltipPosition.x, window.innerWidth - 320)`
+  - `top: min(tooltipPosition.y, window.innerHeight - 200)`
+
+Tooltip contents:
+- Product name (bold)
+- SKU (monospace)
+- If description exists: description line (2-line clamp)
+- A grid of fields:
+  - Price, Stock, Min Stock
+  - Optional fields:
+    - Color (if present)
+    - Lead Time (if present)
+    - Location (if present)
+
+Tooltip z-index:
+- The tooltip is `z-[100]` to appear above dialogs.
+
+--------------------------------------------------------------------------------
+16. Refresh Inventory
+--------------------------------------------------------------------------------
+When `hasPermission('InventoryViewing')`:
+- There is an outline icon button with refresh icon.
+- It triggers `fetchProducts()` on click.
+- It is disabled while `loading` is true.
+
+--------------------------------------------------------------------------------
+17. Navigation Targets from the Inventory List
+--------------------------------------------------------------------------------
+From this page, navigation uses these routes:
+- Row click: `/inventory/{product.id}` (product detail)
+- Pencil click (if InventoryEditing):
+  - `/inventory/{product.id}/edit`
+- “Add New Product” (if InventoryEditing):
+  - `/inventory/new`
+- “Manufacturer Orders” (if ManufacturerOrders):
+  - `/inventory/manufacturer-orders`
+
+--------------------------------------------------------------------------------
+18. Backend Endpoints Used by the Inventory Page
+--------------------------------------------------------------------------------
+This UI relies on:
+- `GET  /api/inventory`
+  - Fetches inventory dataset used for table display.
+- `POST /api/inventory`
+  - Stock adjustment: increments or decrements quantity by delta.
+- `GET  /api/inventory/history?limit=200`
+  - Inventory adjustment history for the history dialog.
+
+Permission expectations:
+- This page itself hides UI based on `hasPermission(...)`.
+- Backend endpoints also enforce permission via `requirePermission`:
+  - `GET /api/inventory` requires `InventoryViewing`
+  - `POST /api/inventory` requires `InventoryEditing`
+  - `GET /api/inventory/history` requires `InventoryViewing`
+
+--------------------------------------------------------------------------------
+END OF DOCUMENT
+--------------------------------------------------------------------------------
+

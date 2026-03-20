@@ -1,0 +1,646 @@
+================================================================================
+ARMADILLO SAFETY PRODUCTS - MANAGEMENT SYSTEM (armadilloOS)
+COMPLETE FEATURE, FUNCTIONALITY, AND DATA FLOW DOCUMENTATION
+================================================================================
+Generated: Exhaustive reference. Do not skip details.
+
+================================================================================
+1. TECHNOLOGY STACK & PROJECT OVERVIEW
+================================================================================
+
+- Framework: Next.js 16 with App Router, TypeScript
+- Database: Supabase (PostgreSQL). README mentions SQLite/Prisma but codebase uses Supabase exclusively.
+- Styling: Tailwind CSS 4, PostCSS
+- UI: Radix UI (dialog, label, select, slot), Lucide icons, Framer Motion, custom components (shadcn-style)
+- Forms: React Hook Form, Zod, @hookform/resolvers
+- Charts: Recharts
+- Other: canvas, jspdf, jspdf-autotable, jszip, jsbarcode, qrcode, react-easy-crop, react-simple-maps, Google GenAI (Gemini) for document parsing
+
+The app is a business management system for Armadillo Safety Products: orders (via Shopify), inventory, quotes (with QuickBooks sync), customers, sales reps, distributors, manufacturer orders, alerts, reports, and admin (users, companies, documents).
+
+================================================================================
+2. AUTHENTICATION & AUTHORIZATION
+================================================================================
+
+--- 2.1 AUTH FLOW ---
+
+- Login: POST /api/auth/login
+  - Body: { email, password }
+  - Passwords are hashed with SHA-256 (crypto.createHash('sha256').update(password).digest('hex')).
+  - User is looked up in Supabase table "users" (id, email, password_hash, name, role).
+  - On success: response sets two cookies and returns { token, user: { id, email, name, role } }.
+  - Cookies set:
+    - auth_token: HTTP-only, 7-day maxAge, path /
+    - user_info: NOT httpOnly (so client can read role), JSON string of { id, email, name, role }
+  - Login page also writes token, user_email, user_name, user_role to localStorage (redundant with user_info cookie).
+
+- Logout: POST /api/auth/logout
+  - Clears auth_token and user_info cookies (maxAge: 0).
+  - Client should clear localStorage and redirect to /login.
+
+- Signup: POST /api/auth/signup
+  - Body: { email, password, role? } (role: Admin | Sales Rep | Distributor | Technician; default Distributor).
+  - Validates email format, password length >= 6, checks for existing user in "users".
+  - Inserts into Supabase "users" (email, password_hash, role). Uses supabaseAdmin first if SUPABASE_SERVICE_ROLE_KEY is set, else supabase.
+  - Same cookie/session setup as login; user is logged in after signup.
+
+--- 2.2 ROLES & PERMISSIONS ---
+
+- Defined in src/lib/permissions.ts.
+- Roles: Admin | Sales Rep | Distributor | Technician
+- Permissions: FullAccess, OrdersViewing, InventoryViewing, InventoryEditing, QrCodesBarcodes, Quoting, QuotingCustomItems, ManufacturerOrders
+- Matrix (summary):
+  - Admin: all permissions (FullAccess = true).
+  - Sales Rep: InventoryViewing, Quoting only.
+  - Distributor: same as Sales Rep.
+  - Technician: OrdersViewing, InventoryViewing, InventoryEditing, QrCodesBarcodes, Quoting.
+- normalizeRole() maps legacy strings (e.g. "rep", "sales_rep") to canonical roles; unknown → Distributor.
+- Client: usePermissions() in src/lib/usePermissions.ts reads role from user_info cookie via getRoleFromUserInfoCookie() and exposes role + hasPermission(permission).
+
+--- 2.3 API AUTH HELPERS (src/lib/auth.ts) ---
+
+- requireAuthWithRole(req): Reads auth_token and user_info cookies; returns { user } or { response: 401/403 }. Used where any logged-in user is enough.
+- requirePermission(req, permission): Same as above but then checks hasPermission(user.role, permission); 403 if insufficient.
+- requireAdmin(req): Requires role === 'Admin'; 403 otherwise. Used for admin-only routes.
+
+Route protection is done per API route (no single middleware.ts found); each protected route calls one of these helpers and returns the error response if auth fails.
+
+--- 2.4 NAVIGATION & DASHBOARD VISIBILITY ---
+
+- ConditionalNavigation hides nav on /login and /signup; otherwise shows Navigation.
+- Navigation (src/components/Navigation.tsx): ALLOWED_NAV_BY_ROLE limits which nav items are shown:
+  - Admin: all (Dashboard, Orders, Quotes, Inventory, Codes, Customers, Sales Reps, Distributors, Alerts, Documents, Users, Company Profiles).
+  - Sales Rep / Distributor / Technician: only /, /inventory, /alerts.
+- Dashboard (page.tsx): DASHBOARD_SECTIONS_BY_ROLE filters section cards the same way (Admin sees all sections; others only Inventory and Alerts).
+- ConditionalMain: main content has lg:ml-[280px] and padding except on /login and /signup (no padding there).
+
+================================================================================
+3. DATA STORAGE (SUPABASE)
+================================================================================
+
+--- 3.1 SUPABASE CLIENTS ---
+
+- src/lib/supabase.ts:
+  - getSupabaseClient(): anon key client (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY). Used for normal DB access (respects RLS if any).
+  - getSupabaseAdminClient(): service role key if SUPABASE_SERVICE_ROLE_KEY is set, else anon. Used for server-side operations that must bypass RLS (e.g. listing users, quotes, alerts).
+  - Exports: supabase and supabaseAdmin as Proxies that delegate to the lazy-initialized clients.
+
+--- 3.2 SCHEMAS & TABLES ---
+
+- Public schema (typical):
+  - users: id, email, password_hash, name, role, avatar_url, company_id, created_at, updated_at. (companies relation for company profile.)
+  - customers: id, name, email, phone, address, city, state, zip_code, country, created_at, updated_at. (orders relation for linked orders.)
+  - distributors: id, name, contact_name, email, phone, address, discount_rate, longitude, latitude, color?, created_at, updated_at.
+  - sales_reps: id, name, email, phone, territory, commission_rate, color, created_at, updated_at.
+  - orders: (if used locally) id, order_number, total_amount, status, customer_id, etc. — but in this app orders are primarily from Shopify; customers table may still be used for internal customer list.
+  - quotes: id, quote_number, status, customer_name, customer_email, customer_phone, customer_address, customer_city, customer_state, customer_zip, customer_country, subtotal, discount_type, discount_value, discount_amount, total, valid_until, notes, quickbooks_estimate_id, quickbooks_synced_at, created_at, updated_at.
+  - quote_items: id, quote_id, product_id, product_name, sku, quantity, unit_price, total_price.
+  - alerts: id, type, severity, title, message, entity_type, entity_id, read, resolved, resolved_at, created_at.
+  - documents: id, name, storage_path, file_size, content_type, uploaded_by, title?, thumbnail_path?, created_at.
+  - companies: id, name, icon_url, logo_url, created_at, updated_at. (users.company_id → companies.id.)
+  - shopify_connections: id, shop, access_token, scope, connected_by_email?, installed_at, updated_at. (Supabase table from supabaseTable/shopify_connections.sql.)
+  - quickbooks_connections: realm_id, access_token, refresh_token, token_expires_at, updated_at (and possibly id). (From supabaseTable/quickbooks_connections.sql.)
+
+- Schema "armadillo_inventory":
+  - inventory: sku, quantity, min_stock, location, name?, price?, color?, leadtime?, description?, category?, updated_at, etc. (product catalog + stock.)
+  - inventory_history: id, sku, quantity_change, quantity_after, source, user_id, user_email, created_at.
+  - manufacturers: id, name, contact_name, contact_email, contact_phone, website, address, city, state, zip_code, country, lead_time, payment_terms, notes, is_active, etc.
+  - manufacturer_orders: id, order_number, manufacturer_id, status, order_date, expected_delivery, tracking_number, tracking_url, carrier, shipping_method, subtotal, shipping_cost, tax, total_amount, po_number, notes, etc.
+  - manufacturer_order_items: id, order_id, sku, product_name, quantity_ordered, quantity_received, unit_cost, total_cost, manufacturer_sku, notes.
+  - products: (referenced in some reports; e.g. name, sku, price, category) — may be view or table joined to inventory.
+
+- Storage buckets (Supabase Storage):
+  - "documents": PDF uploads for admin documents; path pattern {userId}/{timestamp}_{sanitized_filename}.
+  - "companies": company icon and logo images.
+
+--- 3.3 RPC / PRODUCTS ---
+
+- Products are fetched via supabase.rpc('get_products') or supabase.rpc('get_product_by_sku', { product_sku: sku }). So Supabase must have these RPCs defined (not in repo); they likely read from armadillo_inventory or a products view.
+
+================================================================================
+4. PAGE ROUTES (FRONTEND) & WHAT THEY DO
+================================================================================
+
+- / (page.tsx): Dashboard. Admin sees expandable Analytics (revenue, orders, inventory, quotes, QuickBooks P&L, charts, top products/customers); period selector (this month, last 3/6 months, YTD, last year, all time). All roles see role-filtered section cards (Orders, Quotes, Inventory, Customers, Sales Reps, Distributors, Reports, Alerts, Documents).
+- /login: Login form; POST to /api/auth/login; redirect to ?redirect= or /.
+- /signup: Signup form; POST to /api/auth/signup; optional role selection.
+- /orders: List orders (from Shopify); link to /orders/new and /orders/[id].
+- /orders/new: Create order (draft or complete) via Shopify.
+- /orders/[id]: Order detail (Shopify order).
+- /quotes: List quotes (Supabase); link to /quotes/new, /quotes/[id], /quotes/[id]/edit.
+- /quotes/new: Create quote; can push to QuickBooks.
+- /quotes/[id]: Quote detail view.
+- /quotes/[id]/edit: Edit quote.
+- /inventory: Inventory list (armadillo_inventory.inventory); add/edit/scan.
+- /inventory/new: Add new inventory/product.
+- /inventory/[id]: Inventory item detail.
+- /inventory/[id]/edit: Edit inventory item.
+- /inventory/scan: Scan page (e.g. by ?sku= for QR/barcode scan).
+- /inventory/codes: QR/barcode generation for inventory (Codes nav).
+- /inventory/manufacturer-orders: Manufacturer orders list/create (ManufacturerOrders permission).
+- /customers: Customers list; link to /customers/new.
+- /customers/new: Create customer.
+- /sales-reps: Sales reps list; link to /sales-reps/new.
+- /sales-reps/new: Create sales rep.
+- /distributors: Distributors list; link to /distributors/list, /distributors/new, /distributors/[id], /distributors/[id]/edit.
+- /distributors/list: List view.
+- /distributors/new: Create distributor.
+- /distributors/[id]: Distributor detail.
+- /distributors/[id]/edit: Edit distributor.
+- /alerts: Alerts list; filter by resolved/type/severity; mark read/resolved.
+- /profile: User profile (GET/PUT /api/profile); avatar, name, email; QuickBooks & Shopify connect links.
+- /admin/users: Admin only; user management (list, create, edit, delete, import, avatar).
+- /admin/companies: Admin only; company profiles (list, create, edit, icon/logo upload).
+- /admin/documents: Admin only; document list and upload (PDF).
+- /reports/sales: Sales report (Shopify orders by period).
+- /reports/inventory: Inventory report (value, low/out of stock, reorder recommendations).
+- /reports/quotes: Quote report (totals, status breakdown, trend, expiring).
+- /legal/privacy, /legal/eula: Static legal pages.
+- /not-found: 404 page.
+
+================================================================================
+5. API ROUTES – COMPLETE LIST WITH METHOD, AUTH, AND DATA FLOW
+================================================================================
+
+--- 5.1 AUTH ---
+
+- POST /api/auth/login
+  - No auth. Body: { email, password }. Reads users from Supabase; verifies password_hash (SHA-256); sets auth_token + user_info cookies; returns { token, user }.
+
+- POST /api/auth/logout
+  - No auth. Clears auth_token and user_info cookies.
+
+- POST /api/auth/signup
+  - No auth. Body: { email, password, role? }. Inserts users in Supabase; sets same cookies as login; returns { token, user }.
+
+--- 5.2 DASHBOARD ---
+
+- GET /api/dashboard/stats?period=
+  - No explicit requireAuth in code shown; typically called when user is logged in. period: thisMonth | last3Months | last6Months | ytd | lastYear | allTime.
+  - Data flow: getDefaultShopifyCredentials() (Supabase shopify_connections or env); getOrders() from Shopify for date range; aggregates revenue, pending orders, revenue trend, top products, status distribution; reads armadillo_inventory.inventory for low/out of stock counts; reads quotes for active (DRAFT/SENT) count; top customers from order data. If QuickBooks connected (getDefaultQuickBooksCredentials), fetches P&L for this month and this year via getProfitAndLoss/parseProfitAndLoss. Returns combined JSON. If Shopify is not configured, returns partial data (inventory, quotes, QuickBooks only) with error message.
+
+--- 5.3 ORDERS (SHOPIFY) ---
+
+- GET /api/orders
+  - requirePermission(OrdersViewing). Query: limit, status, fulfillment_status, financial_status, created_at_min, created_at_max.
+  - Data flow: getDefaultShopifyCredentials() → getOrders() from Shopify API; transforms to app format (id: shopify-{id}, orderNumber, status, totalAmount, customer, orderItems, shopifyData). Returns array.
+
+- POST /api/orders
+  - requirePermission(OrdersViewing). Body: orderItems, customerEmail, customerPhone, shippingAddress, billingAddress, notes, tags, salesRepName, completeOrder.
+  - Data flow: getDefaultShopifyCredentials() → createDraftOrder() with line items (variantId or custom title/price/sku); optionally completeDraftOrder() if completeOrder true. Returns created draft or completed order.
+
+- GET /api/orders/by-number/[number]
+  - Fetches single order by order number (from Shopify).
+
+- GET /api/shopify/orders (if present): likely raw Shopify orders list.
+- GET /api/shopify/orders/[id]: single Shopify order.
+
+--- 5.4 INVENTORY ---
+
+- GET /api/inventory?sku=
+  - requirePermission(InventoryViewing). Reads armadillo_inventory.inventory; optional filter by sku. Transforms with parseSkuToProduct (sku-parser) for product name/category; returns { inventory: [...] }.
+
+- POST /api/inventory
+  - requirePermission(InventoryEditing). Body: { sku, quantity } (quantity is delta). Updates inventory row (quantity += delta), writes to inventory_history (source: 'manual', user_id, user_email). Then checkLowStockAlerts(). Returns updated inventory object.
+
+- GET /api/inventory/history?sku=&limit=
+  - requirePermission(InventoryViewing). Reads armadillo_inventory.inventory_history; optional sku filter; limit max 500. Returns { history: [...] }.
+
+--- 5.5 PRODUCTS ---
+
+- GET /api/products?sku=&source=
+  - No requireAuth in snippet. If source=shopify: getDefaultShopifyCredentials() → getShopifyProducts(); returns variants as products with shopifyData. Else: supabase.rpc('get_products') or get_product_by_sku(sku); transforms to { id, name, sku, price, ... }; returns array or { products } for single sku.
+
+- POST /api/products
+  - Body: sku, price, color, leadtime, quantity. Inserts into armadillo_inventory.inventory (sku, price, color, leadtime, quantity). Returns created row.
+
+- GET /api/products/[id]: single product (detail).
+- GET /api/products/import: likely bulk import (script or UI).
+
+--- 5.6 CODES (QR / BARCODE) ---
+
+- GET /api/codes?sku=&format=&type=
+  - No requireAuth in snippet. sku optional. format: dataURL | svg; type: qr | barcode.
+  - If sku: loads one row from armadillo_inventory.inventory; generates QR (URL to /inventory/scan?sku=) or barcode (CODE128) via qrcode/jsbarcode/canvas; returns { sku, productName, code, qrCode, barcode?, format, type }.
+  - If no sku: loads all inventory; generates codes for each; returns { codes, qrCodes, total, type }.
+
+--- 5.7 QUOTES ---
+
+- GET /api/quotes
+  - requirePermission(Quoting). supabaseAdmin.from('quotes').select('*, quote_items(*)').order('created_at', { ascending: false }). Maps with mapQuoteRowToApi (quote-supabase). Returns array.
+
+- POST /api/quotes
+  - requirePermission(Quoting). Body: customerName, customerEmail, customerPhone, customerAddress, city, state, zip, country, quoteItems, discountType, discountValue, validUntil, notes. Generates quote_number via generateQuoteNumber() (YY + NNNN); inserts quotes + quote_items; runs checkQuoteExpirationAlerts(); then getDefaultQuickBooksCredentials() and pushQuoteToQuickBooks(); updates quote with quickbooks_estimate_id and quickbooks_synced_at. Returns created quote (or with warning if QB push fails).
+
+- GET /api/quotes/[id]
+  - requirePermission(Quoting). Loads quote + quote_items; adds quickbooksOpenUrl if quickbooks_estimate_id and QB creds exist. Returns mapQuoteRowToApi.
+
+- PATCH /api/quotes/[id]
+  - requirePermission(Quoting). Updates status, quoteItems, customer fields, discount, validUntil, notes, pushToQuickBooks. If quoteItems provided, deletes existing quote_items and re-inserts; recalculates subtotal/discount/total. If pushToQuickBooks, calls pushQuoteToQuickBooks and updates quickbooks_estimate_id. Runs checkQuoteExpirationAlerts(). Returns updated quote.
+
+- DELETE /api/quotes/[id]
+  - requirePermission(Quoting). Deletes quote (cascade deletes quote_items).
+
+- POST /api/quotes/sync-from-quickbooks: sync quotes from QuickBooks (if implemented).
+- POST /api/quotes/[id]/push-to-quickbooks: push single quote to QuickBooks.
+
+--- 5.8 CUSTOMERS ---
+
+- GET /api/customers
+  - No requireAuth in snippet. supabase.from('customers').select('*, orders(...)'). Returns transformed list (camelCase, orders nested).
+
+- POST /api/customers
+  - No auth. Body: name, email, phone, address, city, state, zipCode, country. Inserts into customers. Returns created customer.
+
+--- 5.9 DISTRIBUTORS ---
+
+- GET /api/distributors
+  - No auth in snippet. supabase.from('distributors').select('*'). Returns transformed list.
+
+- POST /api/distributors
+  - No auth. Body: name, contactName, email, phone, address, discountRate, longitude, latitude. Inserts into distributors; if no lat/long, calls geocodeAddress() (Nominatim) and updates distributor with lat/long. Returns created distributor.
+
+- GET /api/distributors/[id]: single distributor.
+- PATCH /api/distributors/[id]: update distributor.
+- GET /api/distributors/map?force_geocode=1
+  - Loads distributors with longitude, latitude; for any missing coords (or force_geocode), geocodes address via Nominatim and updates DB; returns list with locations array for map pins.
+
+--- 5.10 SALES REPS ---
+
+- GET /api/sales-reps
+  - No auth. supabase.from('sales_reps').select('*'). Returns transformed list (territory, commissionRate, color, orders if joined).
+
+- POST /api/sales-reps
+  - No auth. Body: name, email, phone, territory, commissionRate, color. Inserts into sales_reps. Returns created rep.
+
+- GET /api/sales-reps/[id], PATCH /api/sales-reps/[id]: single rep get/update.
+
+--- 5.11 ALERTS ---
+
+- GET /api/alerts?resolved=&type=&severity=&limit=
+  - No requireAuth in snippet. supabaseAdmin.from('alerts').select('*'). Filter by resolved, type, severity; limit default 50. Returns array (mapAlertRowToApi).
+
+- POST /api/alerts
+  - Triggers runAllAlertChecks() (checkLowStockAlerts, checkQuoteExpirationAlerts, checkPendingOrdersAlerts). Returns { success: true }.
+
+- PATCH /api/alerts
+  - Body: { id, read?, resolved? }. Updates alert; if resolved true sets resolved_at. Returns updated alert.
+
+- GET/PATCH/DELETE /api/alerts/[id]: single alert (if implemented).
+
+--- 5.12 REPORTS ---
+
+- GET /api/reports/sales?period=&startDate=&endDate=
+  - No requireAuth in snippet. getDefaultShopifyCredentials() → getOrders(); aggregates by period (daily/weekly/monthly/yearly), by customer, by product, status breakdown; returns revenueTrend, topCustomers, topProducts, statusDistribution, summary (totalRevenue, totalOrders, averageOrderValue).
+
+- GET /api/reports/inventory?period=
+  - Reads armadillo_inventory.inventory with products join; computes totalValue, lowStockCount, outOfStockCount, productPerformance, reorderRecommendations, categoryBreakdown, lowStockItems, outOfStockItems. Returns JSON.
+
+- GET /api/reports/quotes?startDate=&endDate=
+  - supabaseAdmin.from('quotes').select('*, quote_items(*)'); optional date filter. Computes totalQuotes, accepted/sent/draft/rejected/expired counts, totalValue, averageQuoteValue, conversionRate, statusBreakdown, topCustomers, quoteTrend, expiringSoon. Returns JSON.
+
+--- 5.13 MANUFACTURERS & MANUFACTURER ORDERS ---
+
+- GET /api/manufacturers?includeOrders=&activeOnly=
+  - No auth in snippet. armadillo_inventory.manufacturers; if includeOrders, joins manufacturer_orders and manufacturer_order_items. Returns list or list with orders.
+
+- POST /api/manufacturers
+  - Body: name, contact_name, contact_email, contact_phone, website, address, city, state, zip_code, country, lead_time, payment_terms, notes. Inserts into manufacturers (is_active: true). Returns created.
+
+- GET /api/manufacturers/[id], PATCH/DELETE if present.
+
+- GET /api/manufacturer-orders?manufacturerId=&status=
+  - requirePermission(ManufacturerOrders). armadillo_inventory.manufacturer_orders + manufacturer_order_items. Returns ordersWithItems.
+
+- POST /api/manufacturer-orders
+  - requirePermission(ManufacturerOrders). Body: manufacturer_id, order_number, expected_delivery, tracking_number, tracking_url, carrier, shipping_method, subtotal, shipping_cost, tax, total_amount, po_number, notes, items[]. Creates manufacturer_orders row and manufacturer_order_items rows. Returns created order with items.
+
+- GET /api/manufacturer-orders/[id]: single order.
+- POST /api/manufacturer-orders/[id]/apply-to-inventory: apply received quantity to inventory (if implemented).
+
+--- 5.14 TRACKING ---
+
+- POST /api/tracking
+  - requirePermission(ManufacturerOrders). Body: { trackingNumber, carrier?, trackingUrl? }. getEffectiveTrackingUrl() for fallback URL; if carrier is FedEx and FEDEX_CLIENT_ID/SECRET set, calls FedEx Track API (OAuth + trackingnumbers endpoint), parses scan events and status. Returns { trackingNumber, carrier, status, events, trackingUrl, estimatedDelivery?, origin?, destination? }.
+
+--- 5.15 PROFILE ---
+
+- GET /api/profile
+  - requireAuthWithRole. Fetches user by email from users (with companies); returns user object (id, email, name, role, avatar_url, company_id, companies).
+
+- PUT /api/profile
+  - requireAuthWithRole. Body: name, email, avatar_url. Validates email; checks duplicate email; updates users. Returns updated user.
+
+- POST /api/profile/password: change password (if implemented).
+- POST /api/profile/avatar: upload avatar (if implemented).
+
+--- 5.16 SHOPIFY OAUTH ---
+
+- GET /api/shopify/auth?shop=&userEmail=
+  - No auth. Builds Shopify OAuth URL with client_id (SHOPIFY_API_KEY), scope (SHOPIFY_APP_SCOPES), redirect_uri (origin + /api/shopify/callback). Sets cookies shopify_oauth_state, shopify_oauth_user_email. Redirects to Shopify authorize URL.
+
+- GET /api/shopify/callback
+  - Exchanges code for access token; stores in shopify_connections (shop, access_token, scope, connected_by_email from cookie). Redirects back to app (e.g. profile).
+
+- GET /api/shopify/connection: check connection status (if implemented).
+- GET /api/shopify/locations, /api/shopify/products, /api/shopify/inventory, /api/shopify/orders: Shopify API proxies (if implemented).
+
+--- 5.17 QUICKBOOKS OAUTH ---
+
+- GET /api/quickbooks/auth?userEmail=
+  - No auth. Builds Intuit OAuth URL (scope com.intuit.quickbooks.accounting); sets cookies quickbooks_oauth_state, quickbooks_oauth_user_email. Redirects to Intuit. ?debug=1 returns redirectUri for developer portal.
+
+- GET /api/quickbooks/callback
+  - Exchanges code for tokens; stores in quickbooks_connections (realm_id, access_token, refresh_token, token_expires_at). Redirects back to app.
+
+- GET /api/quickbooks/connection: connection status (if implemented).
+- GET /api/quickbooks/financials?period=
+  - Uses getDefaultQuickBooksCredentials() (with token refresh if needed); getProfitAndLoss(startDate, endDate); parseProfitAndLoss(); returns { ok, period, label, startDate, endDate, totalIncome, costOfGoodsSold, totalExpenses, netIncome, grossProfit }.
+- GET /api/quickbooks/customers, /api/quickbooks/accounts: QB API proxies (if implemented).
+
+--- 5.18 GEOCODE ---
+
+- GET /api/geocode/search?q=
+  - No auth. q length >= 3. Calls Nominatim (OpenStreetMap) search with "q, USA"; returns array of { displayName, latitude, longitude } (max 8). Used for address autocomplete and distributor map.
+
+--- 5.19 DOCUMENT PARSING ---
+
+- POST /api/parse-document
+  - FormData: file (image or PDF), type (e.g. 'auto' or document type). Uses Google GenAI (Gemini 2.0 Flash); sends file as base64; prompt asks for structured JSON (tracking_number, carrier, PO fields, invoice fields, etc.). Returns { success, data: extractedData, raw_response, parse_error? }. Used for parsing shipping labels, POs, invoices.
+
+--- 5.20 ADMIN USERS ---
+
+- GET /api/admin/users
+  - requireAdmin. supabaseAdmin.from('users').select('id, email, name, role, avatar_url, company_id, created_at, updated_at, companies(...)'). Returns list.
+
+- POST /api/admin/users (if implemented): create user.
+- GET /api/admin/users/[id], PATCH /api/admin/users/[id], DELETE: single user CRUD.
+- POST /api/admin/users/import: bulk import users (CSV or similar).
+- GET /api/admin/users/[id]/avatar: avatar image (if implemented).
+
+--- 5.21 ADMIN COMPANIES ---
+
+- GET /api/admin/companies
+  - requireAdmin. supabaseAdmin.from('companies').select('id, name, icon_url, logo_url, created_at, updated_at'). Returns list.
+
+- POST /api/admin/companies
+  - requireAdmin. Body: { name }. Inserts companies. Returns created.
+
+- GET /api/admin/companies/[id], PATCH /api/admin/companies/[id]: single company.
+- GET/PUT /api/admin/companies/[id]/icon, /api/admin/companies/[id]/logo: icon/logo upload (Supabase storage bucket "companies").
+
+--- 5.22 ADMIN DOCUMENTS ---
+
+- GET /api/admin/documents
+  - requireAdmin. supabaseAdmin.from('documents').select('id, name, title, file_size, content_type, created_at, thumbnail_path'). Returns list.
+
+- POST /api/admin/documents
+  - requireAdmin. FormData file (PDF only, max 20MB). Uploads to storage bucket "documents" at {userId}/{timestamp}_{filename}; inserts documents row (name, storage_path, file_size, content_type, uploaded_by). Returns document record.
+
+- GET /api/admin/documents/[id]: single document (metadata or download).
+- GET /api/admin/documents/[id]/thumbnail: thumbnail image (if implemented).
+- DELETE /api/admin/documents/[id]: delete document and storage object (if implemented).
+
+================================================================================
+6. LIBRARIES & UTILITIES (DATA FLOW HELPERS)
+================================================================================
+
+- lib/supabase.ts: Supabase client singletons (anon + admin).
+- lib/auth.ts: requireAuthWithRole, requirePermission, requireAdmin; cookie-based auth.
+- lib/permissions.ts: Role/Permission types, ROLE_PERMISSIONS matrix, normalizeRole, hasPermission, getRoleFromUserInfoCookie.
+- lib/usePermissions.ts: Client hook reading role from user_info cookie.
+- lib/shopify-connection.ts: getDefaultShopifyCredentials(); reads shopify_connections (latest by updated_at) or env SHOPIFY_STORE_DOMAIN, SHOPIFY_ACCESS_TOKEN.
+- lib/quickbooks-connection.ts: getDefaultQuickBooksCredentials(); reads quickbooks_connections; refreshes token if expired (OAuth2 refresh); fallback env QUICKBOOKS_REALM_ID, QUICKBOOKS_ACCESS_TOKEN.
+- lib/shopify.ts: getOrders, getProducts, getProduct, createDraftOrder, completeDraftOrder (Shopify Admin API).
+- lib/quickbooks.ts: getProfitAndLoss, parseProfitAndLoss (QuickBooks API).
+- lib/quote-quickbooks.ts: pushQuoteToQuickBooks (create/update Estimate in QB).
+- lib/quote-number.ts: generateQuoteNumber() from quotes table (YY + NNNN).
+- lib/quote-supabase.ts: mapQuoteRowToApi, quoteApiToInsertRow, quoteItemApiToInsertRow, quoteRowToQuickBooksShape (snake_case ↔ API/QuickBooks).
+- lib/alerts.ts: createAlert(); checkLowStockAlerts() (inventory vs min_stock; create/update alerts); checkQuoteExpirationAlerts() (SENT quotes expiring in 7 days, already expired); checkPendingOrdersAlerts() (stub); runAllAlertChecks().
+- lib/geocode.ts: geocodeAddress() — Nominatim API; returns { latitude, longitude } or null.
+- lib/sku-parser.ts: parseSkuToProduct(sku) — FAMILY_MAP, COLOR_MAP, EXACT_SKU_TITLE_MAP; returns ParsedSku (title, familyName, productType, colorName, etc.). Used for inventory product names and codes.
+- lib/tracking.ts: getEffectiveTrackingUrl(), isFedExCarrier(); TrackingDetails type (used by /api/tracking).
+
+================================================================================
+7. EXTERNAL SERVICES & ENV VARS
+================================================================================
+
+- Supabase: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (optional, for admin ops).
+- Shopify: SHOPIFY_API_KEY, SHOPIFY_API_SECRET, SHOPIFY_APP_URL, SHOPIFY_APP_SCOPES; or legacy SHOPIFY_STORE_DOMAIN, SHOPIFY_ACCESS_TOKEN. OAuth stores in shopify_connections.
+- QuickBooks: QUICKBOOKS_CLIENT_ID, QUICKBOOKS_CLIENT_SECRET, QUICKBOOKS_APP_URL, QUICKBOOKS_SANDBOX (true for sandbox). OAuth stores in quickbooks_connections. Optional env fallback: QUICKBOOKS_REALM_ID, QUICKBOOKS_ACCESS_TOKEN.
+- FedEx (tracking): FEDEX_CLIENT_ID, FEDEX_CLIENT_SECRET, FEDEX_SANDBOX (default true).
+- Geocoding: Nominatim (OpenStreetMap) — no key; User-Agent set.
+- Document parsing: GEMINI_API_KEY or GOOGLE_AI_API_KEY (Google GenAI).
+- App URL: NEXT_PUBLIC_APP_URL (e.g. for QR code base URL).
+
+================================================================================
+8. COMPONENTS (KEY)
+================================================================================
+
+- ConditionalNavigation, ConditionalMain: layout helpers (hide nav/main padding on login/signup).
+- Navigation: sidebar (desktop) + mobile menu; role-based nav items; unread alerts count from GET /api/alerts?resolved=false&limit=500; sign out → POST /api/auth/logout + redirect /login.
+- SyncedGif: animated logo (armaBase.gif, armadillosrunning.gif).
+- RevenueChart, SalesBarChart, StatusPieChart, InventoryChart (reports/dashboard).
+- AlertBell: likely alerts indicator.
+- UserDisplay: user avatar/name (e.g. profile or nav).
+- OrderTrackingTimeline: timeline for tracking events (FedEx or generic).
+- UI: button, card, input, label, select, table, badge, skeleton, textarea (shadcn-style under components/ui).
+
+================================================================================
+9. DATA FLOW SUMMARY (WHERE DATA LIVES AND GOES)
+================================================================================
+
+- Orders: Source of truth = Shopify. App reads via Shopify API (getOrders, getOrder); creates via draft orders. No local orders table required for Shopify flow; dashboard stats and reports/sales use Shopify order data.
+- Inventory: Source of truth = Supabase schema armadillo_inventory (inventory table). Quantity updates write to inventory_history. Low/out-of-stock alerts written to public.alerts. Product names can come from SKU parser or DB.
+- Quotes: Source of truth = Supabase (quotes + quote_items). Optional sync to QuickBooks (Estimates); quickbooks_estimate_id and quickbooks_synced_at stored on quote. Quote numbers generated from DB (YY + NNNN).
+- Customers, Distributors, Sales reps: Supabase public schema (customers, distributors, sales_reps). Distributor addresses geocoded to lat/long (Nominatim) and stored on distributor; map API returns locations for pins.
+- Manufacturers & manufacturer orders: armadillo_inventory (manufacturers, manufacturer_orders, manufacturer_order_items). Tracking uses FedEx API when carrier is FedEx and credentials set.
+- Users & auth: Supabase users table; session in cookies (auth_token, user_info). Companies in companies table; users can have company_id for icon/logo.
+- Documents: Supabase storage bucket "documents" + documents table (metadata). Admin only.
+- Alerts: Supabase alerts table; created/updated by checkLowStockAlerts and checkQuoteExpirationAlerts (and optionally pending orders).
+- Reports: Sales = derived from Shopify orders. Inventory = derived from armadillo_inventory.inventory. Quotes = derived from quotes/quote_items. No separate report storage; computed on demand.
+- Products: Fetched via RPC (get_products, get_product_by_sku) or from Shopify when source=shopify. New products can be inserted into armadillo_inventory.inventory via POST /api/products.
+
+================================================================================
+10. SCRIPTS & OTHER
+================================================================================
+
+- scripts/import-products.ts: npm run import-products (tsx); likely imports product catalog into Supabase (inventory/products).
+- supabaseTable/*.sql: SQL migrations for shopify_connections, quickbooks_connections, companies, documents, distributors, sales_reps, manufacturer_orders, manufacturer_orders_inventory_applied, inventory_history, quotes_quote_items_alerts, users_avatar, etc. Apply these in Supabase to create/alter tables.
+- proxy.ts: possibly dev proxy (not detailed here).
+
+================================================================================
+11. EXACT RESPONSE SHAPES (FOR CODABLE MODELS / PARSERS)
+================================================================================
+
+--- Naming convention ---
+- API responses that go through explicit transforms use camelCase in JSON (inventory, quotes, dashboard stats, alerts, etc.). You can infer Swift Codable / Kotlin data classes directly from the samples below.
+- Supabase tables are snake_case. Endpoints that return raw rows (e.g. some admin lists) may expose snake_case unless the route maps to camelCase (e.g. quote-supabase mapQuoteRowToApi). When in doubt, check the route: if it calls mapQuoteRowToApi, keysToCamel, or a similar transform, the response is camelCase.
+
+--- Sample: GET /api/inventory (200) ---
+Top-level key is "inventory" (array). Each element:
+
+{
+  "inventory": [
+    {
+      "id": "AF-00-11-B",
+      "sku": "AF-00-11-B",
+      "quantity": 42,
+      "min_stock": 10,
+      "location": "A1",
+      "updatedAt": "2026-03-17T12:00:00.000Z",
+      "product": {
+        "id": "AF-00-11-B",
+        "name": "ArmaFlex Rubber Gloves | 11\" Black",
+        "sku": "AF-00-11-B",
+        "price": 24.99,
+        "color": "Black",
+        "leadtime": "2 weeks",
+        "description": null,
+        "category": "Rubber ",
+        "familyName": "ArmaFlex",
+        "productType": "Rubber "
+      }
+    }
+  ]
+}
+
+Note: "min_stock" is left in snake_case in the inventory item (from DB); the rest of the item and product are camelCase where the code explicitly sets it (e.g. updatedAt, product.name). Nullable fields can be null.
+
+--- Sample: GET /api/quotes (200) ---
+Returns an array of quotes (camelCase via mapQuoteRowToApi). Single quote shape (also same as GET /api/quotes/[id] minus optional quickbooksOpenUrl):
+
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "quoteNumber": "260001",
+  "status": "SENT",
+  "customerName": "Acme Corp",
+  "customerEmail": "buyer@acme.com",
+  "customerPhone": "+1-555-0100",
+  "customerAddress": "123 Main St",
+  "customerCity": "Austin",
+  "customerState": "TX",
+  "customerZip": "78701",
+  "customerCountry": "US",
+  "subtotal": 500.00,
+  "discountType": "percentage",
+  "discountValue": 10,
+  "discountAmount": 50.00,
+  "total": 450.00,
+  "validUntil": "2026-04-17T00:00:00.000Z",
+  "createdAt": "2026-03-17T10:00:00.000Z",
+  "updatedAt": "2026-03-17T10:00:00.000Z",
+  "notes": null,
+  "quickbooksEstimateId": "123",
+  "quickbooksSyncedAt": "2026-03-17T10:05:00.000Z",
+  "quoteItems": [
+    {
+      "id": "item-uuid",
+      "quoteId": "550e8400-e29b-41d4-a716-446655440000",
+      "productId": null,
+      "productName": "ArmaFlex Gloves 11\"",
+      "sku": "AF-00-11-B",
+      "quantity": 10,
+      "unitPrice": 25.00,
+      "totalPrice": 250.00
+    }
+  ]
+}
+
+GET /api/quotes/[id] may also include "quickbooksOpenUrl": "https://qbo.intuit.com/..." when QuickBooks is connected.
+
+--- Sample: GET /api/dashboard/stats?period=thisMonth (200) ---
+
+{
+  "period": "thisMonth",
+  "periodLabel": "This Month",
+  "revenue": {
+    "total": 125000.50,
+    "orderCount": 42
+  },
+  "orders": {
+    "pending": 5,
+    "pendingValue": 8500.00,
+    "total": 42
+  },
+  "inventory": {
+    "lowStock": 3,
+    "outOfStock": 1
+  },
+  "quotes": {
+    "active": 7
+  },
+  "charts": {
+    "revenueTrend": [
+      { "date": "2026-03-01", "revenue": 4200.00 },
+      { "date": "2026-03-02", "revenue": 5100.00 }
+    ],
+    "topProducts": [
+      { "name": "ArmaFlex 11\" Black", "revenue": 12000.00, "quantity": 480 }
+    ],
+    "statusDistribution": [
+      { "name": "fulfilled", "value": 30 },
+      { "name": "unfulfilled", "value": 12 }
+    ]
+  },
+  "topCustomers": [
+    { "name": "Acme Corp", "revenue": 25000.00 }
+  ],
+  "quickbooks": {
+    "connected": true,
+    "thisMonth": {
+      "totalIncome": 130000.00,
+      "totalExpenses": 45000.00,
+      "netIncome": 85000.00,
+      "grossProfit": 82000.00
+    },
+    "thisYear": { "totalIncome": 980000.00, "totalExpenses": 320000.00, "netIncome": 660000.00, "grossProfit": 640000.00 }
+  }
+}
+
+When Shopify is not configured, the same route returns partial data with "error": "Shopify integration not configured", revenue/orders/charts/topCustomers zero or empty, and quickbooks present if connected. Error responses use shape { "error": string, "message"?: string } (and optionally "details", "hint") with appropriate HTTP status.
+
+--- Inferring other endpoints ---
+For any route documented in Section 5, response shapes follow the same rules: (1) If the route uses a mapper (e.g. mapQuoteRowToApi, mapAlertRowToApi) or builds an object in JS with camelCase keys, the JSON is camelCase. (2) If the route returns raw Supabase select() without transform, you may see snake_case column names. Use the table schemas in Section 3 and the sample shapes above as the reference for Codable/model generation.
+
+================================================================================
+12. DESIGN TOKENS (DARK THEME)
+================================================================================
+
+--- Colors ---
+- Background (page): #181818 (used on body in layout; overrides CSS variable for main surface).
+- Background (CSS variable): --background: hsl(0, 0%, 9%) ≈ #171717 (card/popover/muted/input use same or similar).
+- Card / secondary surface: same as background (0 0% 9%); cards often use border border-white/20 and sometimes bg-[#181818] or gradient (e.g. from-[#1f1f1f] to-[#252525]).
+- Text primary: white (#ffffff) — --foreground: 0 0% 100%.
+- Text secondary / muted: white at 60% opacity (text-white/60, text-white/50, text-white/40). In CSS vars: --muted-foreground: 0 0% 60% ≈ #999999.
+- Border: --border: 0 0% 20% ≈ #333333; in Tailwind, border-white/20 is common.
+- Accent (primary actions): white background, dark text (e.g. bg-white text-[#181818]). No single bright accent hex; primary is inverted (white on dark).
+- Destructive (errors, delete, “Out of Stock”): --destructive: 0 84% 60% (red). Badge destructive: #C23B22, hover #AC3834. Inline error text: text-red-400, text-red-300; error cards: border-red-500/50, bg-red-500/10.
+- Success (“In Stock”, positive P&L): Badge success #3FA34D, hover #7FB446. Text: text-green-400.
+- Warning (“Low Stock”, “Pending”, “Expiring”): Badge warning #F0C42D, hover #FBAF00. Text: text-yellow-400.
+- Status semantics in UI:
+  - In Stock / Resolved / positive net income: green (green-400 or success badge).
+  - Low Stock / Pending / Expiring soon: yellow (yellow-400 or warning badge).
+  - Out of Stock / Critical / negative net income / errors: red (red-400 or destructive badge).
+
+--- Typography ---
+- Font stack: Body uses Montserrat (weights 300, 400, 500, 600, 700) — var(--font-montserrat). Headings (h1–h6) use Orbit — var(--font-orbit), font-size 1.5rem. Both loaded from Google Fonts in layout.tsx.
+- Additional families available as CSS variables (used where needed): --font-geist-sans (Geist), --font-geist-mono (Geist Mono), --font-michroma (Michroma), --font-orbit (Orbit).
+- Body: font-weight 300, font-style normal. No explicit body font-size in globals; default (16px) applies. Titles in cards/sections often use text-xl or text-2xl (1.25rem / 1.5rem), font-semibold. Caption/secondary: text-sm, text-white/60 or text-white/50.
+- Summary: Title/heading = Orbit 1.5rem (and larger with Tailwind classes). Body = Montserrat 300. Caption = same family, text-sm, muted color. No “use system (SF)”; the design system uses Google Fonts (Orbit + Montserrat) as above.
+
+--- Radii / spacing ---
+- --radius: 0.75rem (12px); used for card and component corners. Badge: rounded-lg (8px).
+- Sidebar width: 280px (w-[280px]). Main content: lg:ml-[280px], padding p-8, top padding pt-24 (mobile) / lg:pt-8 (desktop).
+
+--- Badge variants (reference) ---
+- default: bg-white text-[#181818]
+- secondary: border-white/20 bg-white/10 text-white
+- destructive: bg-[#C23B22] text-white (hover #AC3834)
+- success: bg-[#3FA34D] text-white (hover #7FB446)
+- warning: bg-[#F0C42D] text-black (hover #FBAF00)
+- outline: bg-white text-[#181818] border border-white/20
+
+================================================================================
+END OF DOCUMENTATION
+================================================================================
