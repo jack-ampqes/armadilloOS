@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ComponentProps } from 'react'
 import Link from 'next/link'
-import { Plus, Pencil, Phone, Mail, MapPin, RefreshCw, Search, X, Users, Building2, Receipt, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { Plus, Pencil, Phone, Mail, MapPin, RefreshCw, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Copy, Trash2, Check, Minus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,6 +10,67 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
+
+function TableCheckbox({
+  className,
+  mixed,
+  ...inputProps
+}: Omit<ComponentProps<'input'>, 'type'> & { mixed?: boolean }) {
+  const checked = Boolean(inputProps.checked)
+
+  return (
+    <label
+      className={cn(
+        'inline-flex cursor-pointer items-center justify-center rounded-md p-0.5',
+        'has-[:disabled]:pointer-events-none has-[:disabled]:opacity-35',
+        className
+      )}
+    >
+      <input
+        type="checkbox"
+        className="peer sr-only"
+        {...inputProps}
+        checked={checked}
+        aria-checked={mixed ? 'mixed' : checked}
+      />
+      <span
+        className={cn(
+          'relative flex size-5 shrink-0 items-center justify-center rounded-md',
+          'border border-white/[0.14] bg-white/[0.03]',
+          'shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
+          'transition-[border-color,background-color,box-shadow,transform] duration-200 ease-out',
+          'peer-hover:border-white/[0.22]',
+          'peer-active:scale-[0.94]',
+          'peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-white/25 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-zinc-950',
+          'peer-checked:border-transparent peer-checked:bg-white peer-checked:shadow-[0_1px_2px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.85)]',
+          mixed &&
+            !checked &&
+            'border-white/25 bg-white/[0.14] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] peer-hover:border-white/35'
+        )}
+      >
+        <Check
+          strokeWidth={2.75}
+          className={cn(
+            'absolute size-3 text-zinc-900',
+            'scale-[0.6] opacity-0 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.34,1.3,0.64,1)]',
+            checked && !mixed && 'scale-100 opacity-100'
+          )}
+          aria-hidden
+        />
+        <Minus
+          strokeWidth={2.5}
+          className={cn(
+            'absolute size-3 text-white',
+            'scale-[0.6] opacity-0 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.34,1.3,0.64,1)]',
+            mixed && !checked && 'scale-100 opacity-100'
+          )}
+          aria-hidden
+        />
+      </span>
+    </label>
+  )
+}
 
 interface Customer {
   id: string
@@ -46,6 +107,8 @@ export default function CustomersPage() {
   const [editCustomer, setEditCustomer] = useState<Customer | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
   const [deletingEdit, setDeletingEdit] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
   const [editForm, setEditForm] = useState({
     name: '',
     companyName: '',
@@ -212,6 +275,107 @@ export default function CustomersPage() {
     }
   }
 
+  const pageCustomerIds = customers.map((c) => c.id)
+  const selectedOnPageCount = pageCustomerIds.filter((id) => selectedIds.has(id)).length
+  const allPageSelected =
+    pageCustomerIds.length > 0 && selectedOnPageCount === pageCustomerIds.length
+  const somePageSelected =
+    selectedOnPageCount > 0 && selectedOnPageCount < pageCustomerIds.length
+
+  const toggleRowSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAllOnPage = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allPageSelected) {
+        pageCustomerIds.forEach((id) => next.delete(id))
+      } else {
+        pageCustomerIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }
+
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const selectedCustomersOnPage = customers.filter((c) => selectedIds.has(c.id))
+
+  const copySelectedEmails = async () => {
+    const emails = new Set<string>()
+    for (const c of selectedCustomersOnPage) {
+      getEmails(c).forEach((e) => emails.add(e))
+    }
+    if (emails.size === 0) {
+      alert(
+        selectedIds.size > selectedCustomersOnPage.length
+          ? 'No emails on this page for the current selection. Switch to the page where those customers appear, or copy after loading them.'
+          : 'No email addresses on file for the selected customers.'
+      )
+      return
+    }
+    try {
+      await navigator.clipboard.writeText([...emails].join(', '))
+      alert(`Copied ${emails.size} email address(es) to the clipboard.`)
+    } catch {
+      alert('Could not copy to the clipboard.')
+    }
+  }
+
+  const copySelectedNames = async () => {
+    const names = selectedCustomersOnPage.map((c) => c.name).filter(Boolean)
+    if (names.length === 0) {
+      alert('No names to copy for the selected rows on this page.')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(names.join('\n'))
+      alert(`Copied ${names.length} name(s) to the clipboard.`)
+    } catch {
+      alert('Could not copy to the clipboard.')
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    const confirmed = window.confirm(
+      `Delete ${selectedIds.size} customer${selectedIds.size === 1 ? '' : 's'}? This cannot be undone.`
+    )
+    if (!confirmed) return
+
+    setBulkDeleting(true)
+    try {
+      const ids = [...selectedIds]
+      for (const id of ids) {
+        const res = await fetch(`/api/customers/${id}`, { method: 'DELETE' })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || `Failed to delete customer ${id}`)
+        }
+      }
+      clearSelection()
+      const idsSet = new Set(ids)
+      const deletedAllOnPage =
+        customers.length > 0 && customers.every((c) => idsSet.has(c.id))
+      const nextPage = deletedAllOnPage && page > 1 ? page - 1 : page
+      if (nextPage !== page) {
+        setPage(nextPage)
+      } else {
+        await fetchCustomers(false, nextPage, searchTerm)
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to delete some customers')
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   const customersWithOrders = customers.filter(c => c.orders.length > 0).length
   const totalOrders = customers.reduce((sum, c) => sum + c.orders.length, 0)
   const totalRevenue = customers.reduce(
@@ -303,10 +467,66 @@ export default function CustomersPage() {
       </div>
 
       <Card>
+        {selectedIds.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 px-4 py-3 border-b border-white/10 bg-white/[0.06]">
+            <p className="text-sm text-white/90 font-medium mr-auto">
+              {selectedIds.size} selected
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-white/20 bg-white/5 text-white hover:bg-white/10 shrink-0"
+              onClick={clearSelection}
+              disabled={bulkDeleting}
+              title="Clear selection"
+            >
+              <Minus className="h-4 w-4 ml-3 mr-3" aria-hidden />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-white/20 bg-white/5 text-white hover:bg-white/10"
+              onClick={() => void copySelectedEmails()}
+              disabled={bulkDeleting}
+            >
+              <Copy className="h-4 w-4 ml-3" aria-hidden />
+              <Mail className="h-4 w-4 mr-3" aria-hidden />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-white/20 bg-white/5 text-white hover:bg-white/10"
+              onClick={() => void copySelectedNames()}
+              disabled={bulkDeleting}
+            >
+              <Copy className="h-4 w-4 ml-3" aria-hidden />
+              <Phone className="h-4 w-4 mr-3" aria-hidden />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-white/20 bg-red-500/15 text-red-200 hover:bg-red-500/25 hover:text-red-100"
+              onClick={() => void handleBulkDelete()}
+              disabled={bulkDeleting}
+            >
+              <Trash2 className="h-3.5 w-3.5 ml-1.5 mr-1.5" aria-hidden />
+            </Button>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12 px-2 align-middle">
+                  <div className="flex h-full min-h-10 items-center justify-center">
+                    <TableCheckbox
+                      checked={allPageSelected}
+                      mixed={somePageSelected}
+                      onChange={toggleSelectAllOnPage}
+                      aria-label="Select all customers on this page"
+                    />
+                  </div>
+                </TableHead>
                 <TableHead className="w-16 text-white/60">#</TableHead>
                 <TableHead className="text-white/60">Customer</TableHead>
                 <TableHead className="text-white/60">Email(s)</TableHead>
@@ -320,12 +540,25 @@ export default function CustomersPage() {
                 const emails = getEmails(customer)
                 const phones = getPhones(customer)
                 const hasLocation = hasCustomerLocation(customer)
+                const isSelected = selectedIds.has(customer.id)
                 return (
                   <TableRow
                     key={customer.id}
-                    className="hover:bg-white/5 transition-colors cursor-pointer"
+                    className={`hover:bg-white/5 transition-colors cursor-pointer ${isSelected ? 'bg-white/[0.07]' : ''}`}
                     onClick={() => setViewCustomer(customer)}
                   >
+                    <TableCell
+                      className="w-12 px-2 align-middle"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex h-full min-h-9 items-center justify-center">
+                        <TableCheckbox
+                          checked={isSelected}
+                          onChange={() => toggleRowSelected(customer.id)}
+                          aria-label={`Select ${customer.name}`}
+                        />
+                      </div>
+                    </TableCell>
                     <TableCell className="text-white/60 font-mono">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
                     <TableCell>
                       <div>

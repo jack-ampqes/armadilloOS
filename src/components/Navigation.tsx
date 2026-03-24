@@ -56,10 +56,6 @@ function canShowNavItem(href: string, role: Role | null): boolean {
   return ALLOWED_NAV_BY_ROLE[role]?.has(href) ?? false
 }
 
-interface Alert {
-  read: boolean
-}
-
 export default function Navigation() {
   const pathname = usePathname()
   const router = useRouter()
@@ -113,17 +109,30 @@ export default function Navigation() {
 
     const fetchUnreadAlertsCount = async () => {
       try {
-        const response = await fetch('/api/alerts?resolved=false&limit=500', {
+        const url = new URL('/api/alerts', window.location.origin)
+        url.searchParams.set('countOnly', 'true')
+        url.searchParams.set('resolved', 'false')
+        url.searchParams.set('unreadOnly', 'true')
+
+        const response = await fetch(url.toString(), {
           signal: controller.signal,
         })
         if (!response.ok) return
 
-        const data = (await response.json()) as Alert[]
+        const data = (await response.json()) as { count?: number }
         if (aborted) return
 
-        setUnreadAlertsCount(data.filter((a) => !a.read).length)
+        if (typeof data.count === 'number') {
+          setUnreadAlertsCount(data.count)
+        }
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') return
+        if (
+          error instanceof TypeError &&
+          String(error.message).toLowerCase().includes('fetch')
+        ) {
+          return
+        }
         console.error('Error fetching alerts:', error)
       }
     }

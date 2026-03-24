@@ -11,6 +11,41 @@ export async function GET(request: NextRequest) {
     const severity = searchParams.get('severity')
     const limit = parseInt(searchParams.get('limit') || '50', 10)
 
+    if (searchParams.get('countOnly') === 'true') {
+      const unreadOnly = searchParams.get('unreadOnly') === 'true'
+
+      let countQuery = supabaseAdmin
+        .from('alerts')
+        .select('*', { count: 'exact', head: true })
+
+      if (resolved === 'false' || resolved === null || resolved === '') {
+        countQuery = countQuery.eq('resolved', false)
+      } else if (resolved === 'true') {
+        countQuery = countQuery.eq('resolved', true)
+      }
+      if (unreadOnly) {
+        countQuery = countQuery.eq('read', false)
+      }
+      if (type) {
+        countQuery = countQuery.eq('type', type)
+      }
+      if (severity) {
+        countQuery = countQuery.eq('severity', severity)
+      }
+
+      const { count, error: countError } = await countQuery
+
+      if (countError) {
+        console.error('Error counting alerts:', countError)
+        return NextResponse.json(
+          { error: 'Failed to count alerts' },
+          { status: 500 }
+        )
+      }
+
+      return NextResponse.json({ count: count ?? 0 })
+    }
+
     let query = supabaseAdmin
       .from('alerts')
       .select('*')
