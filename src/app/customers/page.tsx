@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { Plus, Eye, Pencil, Phone, Mail, RefreshCw, Search, X, Users, Building2, Receipt, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -40,6 +42,20 @@ export default function CustomersPage() {
   const [page, setPage] = useState(1)
   const [totalCustomers, setTotalCustomers] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
+  const [viewCustomer, setViewCustomer] = useState<Customer | null>(null)
+  const [editCustomer, setEditCustomer] = useState<Customer | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editForm, setEditForm] = useState({
+    name: '',
+    companyName: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: '',
+  })
 
   const getVisiblePages = () => {
     if (totalPages <= 7) {
@@ -90,13 +106,71 @@ export default function CustomersPage() {
   }
 
   const getEmails = (customer: Customer) => {
-    if (customer.emails && customer.emails.length > 0) return customer.emails
-    return customer.email ? [customer.email] : []
+    const raw = customer.emails && customer.emails.length > 0
+      ? customer.emails
+      : (customer.email ? [customer.email] : [])
+
+    return raw
+      .flatMap((value) => value.split(','))
+      .map((value) => value.trim())
+      .filter(Boolean)
   }
 
   const getPhones = (customer: Customer) => {
-    if (customer.phones && customer.phones.length > 0) return customer.phones
-    return customer.phone ? [customer.phone] : []
+    const raw = customer.phones && customer.phones.length > 0
+      ? customer.phones
+      : (customer.phone ? [customer.phone] : [])
+
+    return raw
+      .flatMap((value) => value.split(','))
+      .map((value) => value.trim())
+      .filter(Boolean)
+  }
+
+  const toTelHref = (phone: string) => {
+    const cleaned = phone.replace(/[^\d+]/g, '')
+    return `tel:${cleaned}`
+  }
+
+  const openEditModal = (customer: Customer) => {
+    setEditCustomer(customer)
+    setEditForm({
+      name: customer.name || '',
+      companyName: customer.companyName || '',
+      email: getEmails(customer)[0] || '',
+      phone: getPhones(customer)[0] || '',
+      address: customer.address || '',
+      city: customer.city || '',
+      state: customer.state || '',
+      zipCode: customer.zipCode || '',
+      country: customer.country || '',
+    })
+  }
+
+  const handleEditSave = async () => {
+    if (!editCustomer) return
+    if (!editForm.name.trim()) {
+      alert('Name is required')
+      return
+    }
+    setSavingEdit(true)
+    try {
+      const res = await fetch(`/api/customers/${editCustomer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to update customer')
+      }
+      setEditCustomer(null)
+      await fetchCustomers(false, page, searchTerm)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to update customer')
+    } finally {
+      setSavingEdit(false)
+    }
   }
 
   const customersWithOrders = customers.filter(c => c.orders.length > 0).length
@@ -140,26 +214,8 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                <Users className="w-5 h-5 text-black stroke-[1.5]" />
-              </div>
-              <div className="ml-5">
-                <p className="text-sm text-white/60">Total Customers</p>
-                <p className="text-lg font-medium text-white">{totalCustomers}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
-      <div className="sm:flex sm:items-center sm:gap-4">
-        <div className="sm:flex-auto min-w-0">
-          <h2 className="text-lg font-medium text-white">Directory</h2>
-        </div>
+      <div className="sm:flex sm:items-center sm:justify-left sm:gap-2">
         <div className="mt-4 sm:mt-0 sm:w-80 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 pointer-events-none" />
           <Input
@@ -180,32 +236,31 @@ export default function CustomersPage() {
             </button>
           )}
         </div>
-      </div>
-
-      <div className="flex items-center justify-end gap-1.5">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          disabled={page <= 1 || loading}
-          title="Previous page"
-          className="border-transparent"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <p className="text-xs text-white/60 px-1">
-          {page} / {totalPages}
-        </p>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          disabled={page >= totalPages || loading}
-          title="Next page"
-          className="border-transparent"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+        <div className="mt-2 sm:mt-0 flex items-center justify-end gap-1.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1 || loading}
+            title="Previous page"
+            className="border-transparent"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <p className="text-xs text-white/60 px-1">
+            {page} / {totalPages}
+          </p>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages || loading}
+            title="Next page"
+            className="border-transparent"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -245,7 +300,13 @@ export default function CustomersPage() {
                           {emails.slice(0, 2).map((email) => (
                             <div key={email} className="flex items-center gap-2">
                               <Mail className="h-3.5 w-3.5 text-white/50" />
-                              <span className="truncate max-w-[220px]">{email}</span>
+                              <a
+                                href={`mailto:${email}`}
+                                className="truncate max-w-[220px] text-blue-300 hover:text-blue-200 underline-offset-2 hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {email}
+                              </a>
                             </div>
                           ))}
                           {emails.length > 2 && (
@@ -262,7 +323,13 @@ export default function CustomersPage() {
                           {phones.slice(0, 2).map((phone) => (
                             <div key={phone} className="flex items-center gap-2">
                               <Phone className="h-3.5 w-3.5 text-white/50" />
-                              <span>{phone}</span>
+                              <a
+                                href={toTelHref(phone)}
+                                className="text-blue-300 hover:text-blue-200 underline-offset-2 hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {phone}
+                              </a>
                             </div>
                           ))}
                           {phones.length > 2 && (
@@ -282,17 +349,25 @@ export default function CustomersPage() {
                     <TableCell className="text-white font-medium">${spent.toFixed(2)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" asChild>
-                          <Link href={`/customers/${customer.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="border-none"
+                          onClick={() => setViewCustomer(customer)}
+                          title="View customer"
+                        >
                             <Eye className="h-4 w-4" aria-hidden="true" />
                             <span className="sr-only">View</span>
-                          </Link>
                         </Button>
-                        <Button variant="ghost" size="icon" asChild>
-                          <Link href={`/customers/${customer.id}/edit`}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="border-none"
+                          onClick={() => openEditModal(customer)}
+                          title="Edit customer"
+                        >
                             <Pencil className="h-4 w-4" aria-hidden="true" />
                             <span className="sr-only">Edit</span>
-                          </Link>
                         </Button>
                       </div>
                     </TableCell>
@@ -387,6 +462,123 @@ export default function CustomersPage() {
               </Button>
             )}
           </div>
+        </div>
+      )}
+
+      {viewCustomer && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setViewCustomer(null)}>
+          <Card className="w-full max-w-2xl border border-white/10 bg-[#181818] text-white max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <CardContent className="p-6 space-y-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-white">{viewCustomer.name}</h3>
+                  {viewCustomer.companyName && viewCustomer.companyName !== viewCustomer.name && (
+                    <p className="text-white/60 text-sm mt-1">{viewCustomer.companyName}</p>
+                  )}
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setViewCustomer(null)}>
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div className="rounded-lg border border-white/10 p-4">
+                  <p className="text-white/50 mb-2">Email(s)</p>
+                  {getEmails(viewCustomer).length > 0 ? getEmails(viewCustomer).map((email) => (
+                    <a
+                      key={email}
+                      href={`mailto:${email}`}
+                      className="block text-blue-300 hover:text-blue-200 break-words underline-offset-2 hover:underline"
+                    >
+                      {email}
+                    </a>
+                  )) : <p className="text-white/40">—</p>}
+                </div>
+                <div className="rounded-lg border border-white/10 p-4">
+                  <p className="text-white/50 mb-2">Phone(s)</p>
+                  {getPhones(viewCustomer).length > 0 ? getPhones(viewCustomer).map((phone) => (
+                    <a
+                      key={phone}
+                      href={toTelHref(phone)}
+                      className="block text-blue-300 hover:text-blue-200 underline-offset-2 hover:underline"
+                    >
+                      {phone}
+                    </a>
+                  )) : <p className="text-white/40">—</p>}
+                </div>
+                <div className="rounded-lg border border-white/10 p-4 sm:col-span-2">
+                  <p className="text-white/50 mb-2">Address</p>
+                  <p className="text-white whitespace-pre-wrap">{viewCustomer.address || '—'}</p>
+                  {(viewCustomer.city || viewCustomer.state || viewCustomer.zipCode || viewCustomer.country) && (
+                    <p className="text-white/70 mt-2">
+                      {[viewCustomer.city, viewCustomer.state, viewCustomer.zipCode, viewCustomer.country].filter(Boolean).join(', ')}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {editCustomer && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !savingEdit && setEditCustomer(null)}>
+          <Card className="w-full max-w-2xl border border-white/10 bg-[#181818] text-white max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">Edit Customer</h3>
+                <Button variant="ghost" size="icon" onClick={() => setEditCustomer(null)} disabled={savingEdit}>
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <Label htmlFor="edit-name">Name</Label>
+                  <Input id="edit-name" value={editForm.name} onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))} className="mt-1 bg-white/10 border-white/20 text-white placeholder:text-white/40" />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label htmlFor="edit-company">Company</Label>
+                  <Input id="edit-company" value={editForm.companyName} onChange={(e) => setEditForm(prev => ({ ...prev, companyName: e.target.value }))} className="mt-1 bg-white/10 border-white/20 text-white placeholder:text-white/40" />
+                </div>
+                <div>
+                  <Label htmlFor="edit-email">Primary Email</Label>
+                  <Input id="edit-email" value={editForm.email} onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))} className="mt-1 bg-white/10 border-white/20 text-white placeholder:text-white/40" />
+                </div>
+                <div>
+                  <Label htmlFor="edit-phone">Primary Phone</Label>
+                  <Input id="edit-phone" value={editForm.phone} onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))} className="mt-1 bg-white/10 border-white/20 text-white placeholder:text-white/40" />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label htmlFor="edit-address">Address</Label>
+                  <Textarea id="edit-address" value={editForm.address} onChange={(e) => setEditForm(prev => ({ ...prev, address: e.target.value }))} className="mt-1 bg-white/10 border-white/20 text-white placeholder:text-white/40" rows={3} />
+                </div>
+                <div>
+                  <Label htmlFor="edit-city">City</Label>
+                  <Input id="edit-city" value={editForm.city} onChange={(e) => setEditForm(prev => ({ ...prev, city: e.target.value }))} className="mt-1 bg-white/10 border-white/20 text-white placeholder:text-white/40" />
+                </div>
+                <div>
+                  <Label htmlFor="edit-state">State</Label>
+                  <Input id="edit-state" value={editForm.state} onChange={(e) => setEditForm(prev => ({ ...prev, state: e.target.value }))} className="mt-1 bg-white/10 border-white/20 text-white placeholder:text-white/40" />
+                </div>
+                <div>
+                  <Label htmlFor="edit-zip">ZIP</Label>
+                  <Input id="edit-zip" value={editForm.zipCode} onChange={(e) => setEditForm(prev => ({ ...prev, zipCode: e.target.value }))} className="mt-1 bg-white/10 border-white/20 text-white placeholder:text-white/40" />
+                </div>
+                <div>
+                  <Label htmlFor="edit-country">Country</Label>
+                  <Input id="edit-country" value={editForm.country} onChange={(e) => setEditForm(prev => ({ ...prev, country: e.target.value }))} className="mt-1 bg-white/10 border-white/20 text-white placeholder:text-white/40" />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setEditCustomer(null)} disabled={savingEdit}>Cancel</Button>
+                <Button onClick={handleEditSave} disabled={savingEdit}>
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>
