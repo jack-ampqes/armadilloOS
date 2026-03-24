@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Plus, Pencil, Phone, Mail, RefreshCw, Search, X, Users, Building2, Receipt, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { Plus, Pencil, Phone, Mail, MapPin, RefreshCw, Search, X, Users, Building2, Receipt, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -132,6 +132,14 @@ export default function CustomersPage() {
     const cleaned = phone.replace(/[^\d+]/g, '')
     return `tel:${cleaned}`
   }
+
+  // Location pin uses only public.customers.address (not city/state/country alone).
+  const hasCustomerLocation = (customer: Customer) => Boolean(customer.address?.trim())
+
+  const getLocationLabel = (customer: Customer) => customer.address?.trim() || ''
+
+  const googleMapsSearchUrl = (address: string) =>
+    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
 
   const openEditModal = (customer: Customer) => {
     setEditCustomer(customer)
@@ -303,9 +311,7 @@ export default function CustomersPage() {
                 <TableHead className="text-white/60">Customer</TableHead>
                 <TableHead className="text-white/60">Email(s)</TableHead>
                 <TableHead className="text-white/60">Phone(s)</TableHead>
-                <TableHead className="text-white/60">Location</TableHead>
-                <TableHead className="text-white/60">Orders</TableHead>
-                <TableHead className="text-white/60">Spent</TableHead>
+                <TableHead className="w-14 text-white/60 text-center">Location</TableHead>
                 <TableHead className="w-20 text-white/60">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -313,7 +319,7 @@ export default function CustomersPage() {
               {customers.map((customer, index) => {
                 const emails = getEmails(customer)
                 const phones = getPhones(customer)
-                const spent = customer.orders.reduce((sum, order) => sum + order.totalAmount, 0)
+                const hasLocation = hasCustomerLocation(customer)
                 return (
                   <TableRow
                     key={customer.id}
@@ -375,13 +381,31 @@ export default function CustomersPage() {
                         <span className="text-white/40">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm text-white/70">
-                      {customer.city && customer.state
-                        ? `${customer.city}, ${customer.state}${customer.zipCode ? ` ${customer.zipCode}` : ''}`
-                        : customer.country || '—'}
+                    <TableCell className="text-center">
+                      <div className="flex justify-center">
+                        {hasLocation ? (
+                          <Button variant="ghost" size="icon" className="border-none" asChild>
+                            <a
+                              href={googleMapsSearchUrl(getLocationLabel(customer))}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              title={getLocationLabel(customer)}
+                            >
+                              <MapPin className="h-4 w-4 text-white" aria-hidden />
+                              <span className="sr-only">Open address in Google Maps (new tab)</span>
+                            </a>
+                          </Button>
+                        ) : (
+                          <div
+                            className="flex h-9 w-9 items-center justify-center"
+                            aria-label="No address on file"
+                          >
+                            <MapPin className="h-4 w-4 text-white/30" aria-hidden />
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
-                    <TableCell className="text-white">{customer.orders.length}</TableCell>
-                    <TableCell className="text-white font-medium">${spent.toFixed(2)}</TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <Button
