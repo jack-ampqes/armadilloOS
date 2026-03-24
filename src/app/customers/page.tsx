@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Plus, Eye, Pencil, Phone, Mail, RefreshCw, Search, X, Users, Building2, Receipt, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { Plus, Pencil, Phone, Mail, RefreshCw, Search, X, Users, Building2, Receipt, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -45,6 +45,7 @@ export default function CustomersPage() {
   const [viewCustomer, setViewCustomer] = useState<Customer | null>(null)
   const [editCustomer, setEditCustomer] = useState<Customer | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
+  const [deletingEdit, setDeletingEdit] = useState(false)
   const [editForm, setEditForm] = useState({
     name: '',
     companyName: '',
@@ -173,6 +174,36 @@ export default function CustomersPage() {
     }
   }
 
+  const handleDeleteCustomer = async () => {
+    if (!editCustomer) return
+    const confirmed = window.confirm(`Delete customer "${editCustomer.name}"? This cannot be undone.`)
+    if (!confirmed) return
+
+    setDeletingEdit(true)
+    try {
+      const res = await fetch(`/api/customers/${editCustomer.id}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to delete customer')
+      }
+
+      setEditCustomer(null)
+
+      const nextPage = customers.length === 1 && page > 1 ? page - 1 : page
+      if (nextPage !== page) {
+        setPage(nextPage)
+      } else {
+        await fetchCustomers(false, nextPage, searchTerm)
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to delete customer')
+    } finally {
+      setDeletingEdit(false)
+    }
+  }
+
   const customersWithOrders = customers.filter(c => c.orders.length > 0).length
   const totalOrders = customers.reduce((sum, c) => sum + c.orders.length, 0)
   const totalRevenue = customers.reduce(
@@ -284,7 +315,11 @@ export default function CustomersPage() {
                 const phones = getPhones(customer)
                 const spent = customer.orders.reduce((sum, order) => sum + order.totalAmount, 0)
                 return (
-                  <TableRow key={customer.id} className="hover:bg-white/5 transition-colors">
+                  <TableRow
+                    key={customer.id}
+                    className="hover:bg-white/5 transition-colors cursor-pointer"
+                    onClick={() => setViewCustomer(customer)}
+                  >
                     <TableCell className="text-white/60 font-mono">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
                     <TableCell>
                       <div>
@@ -347,18 +382,8 @@ export default function CustomersPage() {
                     </TableCell>
                     <TableCell className="text-white">{customer.orders.length}</TableCell>
                     <TableCell className="text-white font-medium">${spent.toFixed(2)}</TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="border-none"
-                          onClick={() => setViewCustomer(customer)}
-                          title="View customer"
-                        >
-                            <Eye className="h-4 w-4" aria-hidden="true" />
-                            <span className="sr-only">View</span>
-                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -476,7 +501,7 @@ export default function CustomersPage() {
                     <p className="text-white/60 text-sm mt-1">{viewCustomer.companyName}</p>
                   )}
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setViewCustomer(null)}>
+                <Button variant="ghost" size="icon" className="border-none" onClick={() => setViewCustomer(null)}>
                   <X className="h-5 w-5" />
                 </Button>
               </div>
@@ -527,7 +552,7 @@ export default function CustomersPage() {
             <CardContent className="p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold text-white">Edit Customer</h3>
-                <Button variant="ghost" size="icon" onClick={() => setEditCustomer(null)} disabled={savingEdit}>
+                <Button variant="ghost" size="icon" className="border-none" onClick={() => setEditCustomer(null)} disabled={savingEdit}>
                   <X className="h-5 w-5" />
                 </Button>
               </div>
@@ -571,11 +596,21 @@ export default function CustomersPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setEditCustomer(null)} disabled={savingEdit}>Cancel</Button>
-                <Button onClick={handleEditSave} disabled={savingEdit}>
-                  {savingEdit ? 'Saving...' : 'Save Changes'}
+              <div className="flex items-center justify-between gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={handleDeleteCustomer}
+                  disabled={savingEdit || deletingEdit}
+                  className="border-none bg-white/10 text-red-300 hover:bg-red-500/10 hover:text-red-200"
+                >
+                  {deletingEdit ? 'Deleting...' : 'Delete'}
                 </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" className="border-none bg-white/10" onClick={() => setEditCustomer(null)} disabled={savingEdit || deletingEdit}>Cancel</Button>
+                  <Button className="border-none bg-white/10" onClick={handleEditSave} disabled={savingEdit || deletingEdit}>
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
