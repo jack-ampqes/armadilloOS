@@ -232,7 +232,7 @@ export default function Navigation() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-5">
+          <nav className="flex-1 min-h-0 px-5 overflow-y-auto sidebar-scroll">
             {navigation.map((item, index) => {
               if (!canShowNavItem(item.href, role)) return null
 
@@ -294,7 +294,7 @@ export default function Navigation() {
           >
             <div className="flex flex-col h-full">
               {/* Navigation */}
-              <nav className="flex-1 px-4 space-y-2">
+              <nav className="flex-1 min-h-0 px-4 space-y-2 overflow-y-auto sidebar-scroll">
                 {navigation.map((item, index) => {
                   if (!canShowNavItem(item.href, role)) return null
                   const isActive = pathname === item.href
@@ -343,6 +343,16 @@ export default function Navigation() {
           </motion.aside>
         </>
       )}
+      <style jsx global>{`
+        .sidebar-scroll {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .sidebar-scroll::-webkit-scrollbar {
+          width: 0;
+          height: 0;
+        }
+      `}</style>
     </>
   )
 }

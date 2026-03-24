@@ -1,21 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { data: customers, error } = await supabase
+    const searchParams = request.nextUrl.searchParams
+    const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1)
+    const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '250', 10), 1), 500)
+    const search = (searchParams.get('search') || '').trim()
+    const from = (page - 1) * pageSize
+    const to = from + pageSize - 1
+
+    let query = supabase
       .from('customers')
-      .select(`
-        *,
-        orders(
-          id,
-          order_number,
-          total_amount,
-          status,
-          created_at
-        )
-      `)
+      .select('*', { count: 'exact' })
       .order('name', { ascending: true })
+      .range(from, to)
+
+    if (search) {
+      const escaped = search.replace(/[%_]/g, '\\$&')
+      query = query.or(`name.ilike.%${escaped}%,company_name.ilike.%${escaped}%,email.ilike.%${escaped}%,phone.ilike.%${escaped}%`)
+    }
+
+    const { data: customers, error, count } = await query
 
     if (error) throw error
 
@@ -23,8 +29,11 @@ export async function GET() {
     const transformedCustomers = customers?.map((customer: any) => ({
       id: customer.id,
       name: customer.name,
+      companyName: customer.company_name,
       email: customer.email,
+      emails: Array.isArray(customer.emails) ? customer.emails : [],
       phone: customer.phone,
+      phones: Array.isArray(customer.phones) ? customer.phones : [],
       address: customer.address,
       city: customer.city,
       state: customer.state,
@@ -32,18 +41,19 @@ export async function GET() {
       country: customer.country,
       createdAt: customer.created_at,
       updatedAt: customer.updated_at,
-      orders: (customer.orders || []).map((order: any) => ({
-        id: order.id,
-        orderNumber: order.order_number,
-        totalAmount: parseFloat(order.total_amount),
-        status: order.status,
-        createdAt: order.created_at
-      })).sort((a: any, b: any) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
+      // Keep API shape stable even if no customer->orders FK exists in DB.
+      orders: []
     })) || []
 
-    return NextResponse.json(transformedCustomers)
+    return NextResponse.json({
+      data: transformedCustomers,
+      pagination: {
+        page,
+        pageSize,
+        total: count ?? 0,
+        totalPages: Math.max(Math.ceil((count ?? 0) / pageSize), 1),
+      },
+    })
   } catch (error) {
     console.error('Error fetching customers:', error)
     return NextResponse.json(
@@ -63,7 +73,9 @@ export async function POST(request: NextRequest) {
       .insert({
         name,
         email,
+        emails: email ? [email] : [],
         phone,
+        phones: phone ? [phone] : [],
         address,
         city,
         state,
@@ -79,8 +91,11 @@ export async function POST(request: NextRequest) {
     const transformedCustomer = {
       id: customer.id,
       name: customer.name,
+      companyName: customer.company_name,
       email: customer.email,
+      emails: Array.isArray(customer.emails) ? customer.emails : [],
       phone: customer.phone,
+      phones: Array.isArray(customer.phones) ? customer.phones : [],
       address: customer.address,
       city: customer.city,
       state: customer.state,
