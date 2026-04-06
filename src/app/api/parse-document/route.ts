@@ -1,6 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenAI } from '@google/genai'
 
+const SUPPORTED_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'image/gif',
+  'application/pdf',
+])
+
+function inferMimeType(file: File, buffer: Buffer): string {
+  if (file.type && SUPPORTED_TYPES.has(file.type)) {
+    return file.type
+  }
+
+  const fileName = file.name.toLowerCase()
+  if (fileName.endsWith('.pdf')) return 'application/pdf'
+  if (fileName.endsWith('.png')) return 'image/png'
+  if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')) return 'image/jpeg'
+  if (fileName.endsWith('.webp')) return 'image/webp'
+  if (fileName.endsWith('.gif')) return 'image/gif'
+
+  // Some uploads come through with empty MIME types; sniff common signatures.
+  if (buffer.length >= 4 && buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
+    return 'application/pdf'
+  }
+  if (buffer.length >= 8 &&
+    buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 &&
+    buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a
+  ) {
+    return 'image/png'
+  }
+
+  return file.type || 'application/octet-stream'
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
@@ -28,20 +63,10 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes)
     const base64 = buffer.toString('base64')
     
-    // Determine MIME type
-    const mimeType = file.type || 'image/png'
-    
-    // Validate supported file types
-    const supportedTypes = [
-      'image/png', 
-      'image/jpeg', 
-      'image/jpg', 
-      'image/webp', 
-      'image/gif',
-      'application/pdf'
-    ]
-    
-    if (!supportedTypes.includes(mimeType)) {
+    // Determine MIME type from headers/filename/signature for better PDF support
+    const mimeType = inferMimeType(file, buffer)
+
+    if (!SUPPORTED_TYPES.has(mimeType)) {
       return NextResponse.json({ 
         error: `Unsupported file type: ${mimeType}`,
         hint: 'Please upload a PNG, JPG, WebP, GIF, or PDF file'
@@ -125,7 +150,7 @@ Return ONLY valid JSON with the extracted fields. Use null for fields that aren'
         data: extractedData,
         raw_response: content
       })
-    } catch (parseError) {
+    } catch {
       // If JSON parsing fails, return the raw content
       return NextResponse.json({
         success: true,
@@ -134,11 +159,12 @@ Return ONLY valid JSON with the extracted fields. Use null for fields that aren'
         parse_error: 'Could not parse response as JSON'
       })
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const details = error instanceof Error ? error.message : 'Unknown error'
     console.error('Error parsing document:', error)
     return NextResponse.json({
       error: 'Failed to parse document',
-      details: error?.message || 'Unknown error'
+      details
     }, { status: 500 })
   }
 }

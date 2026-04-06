@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowLeft, Package, Truck, Clock, CheckCircle, ChevronRight, ChevronDown, Plus, ExternalLink, RefreshCw, X, Trash2, Upload, Loader2, Search } from 'lucide-react'
+import { ArrowLeft, Package, Truck, Clock, CheckCircle, ChevronRight, ChevronDown, Plus, ExternalLink, RefreshCw, X, Trash2, Upload, Loader2, Search, Paperclip, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -43,6 +43,15 @@ interface ManufacturerOrder {
   inventory_applied_at?: string | null
 }
 
+interface OrderDocument {
+  id: string
+  name: string
+  contentType: string
+  size: number
+  uploadedAt: string
+  viewUrl?: string | null
+}
+
 interface Manufacturer {
   id: string
   name: string
@@ -66,6 +75,45 @@ interface NewOrderItem {
   product_name: string
   quantity: number
   unit_cost: number
+}
+
+interface ParsedOrderDocumentItem {
+  sku?: string
+  name?: string
+  description?: string
+  quantity?: string | number
+  unit_cost?: string | number
+}
+
+interface ParsedOrderDocumentData {
+  tracking_number?: string
+  carrier?: string
+  ship_date?: string
+  expected_delivery?: string
+  po_number?: string
+  ship_to_name?: string
+  ship_to_address?: string
+  items?: ParsedOrderDocumentItem[]
+}
+
+interface ParseDocumentResponse {
+  success?: boolean
+  data?: ParsedOrderDocumentData | null
+  error?: string
+}
+
+const SUPPORTED_IMPORT_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'image/gif',
+  'application/pdf',
+])
+
+const hasSupportedImportType = (file: File) => {
+  const extension = file.name.split('.').pop()?.toLowerCase()
+  return SUPPORTED_IMPORT_TYPES.has(file.type) || extension === 'pdf'
 }
 
 // Manufacturer logo mapping - add new manufacturers here
@@ -137,6 +185,9 @@ export default function ManufacturerOrdersPage() {
   // Loading state for "Add to inventory" button per order
   const [applyingOrderId, setApplyingOrderId] = useState<string | null>(null)
   const [selectedPastOrder, setSelectedPastOrder] = useState<ManufacturerOrder | null>(null)
+  const [orderDocuments, setOrderDocuments] = useState<Record<string, OrderDocument[]>>({})
+  const [loadingOrderDocuments, setLoadingOrderDocuments] = useState<Record<string, boolean>>({})
+  const [uploadingOrderDocumentId, setUploadingOrderDocumentId] = useState<string | null>(null)
 
   // Dynamic color theming based on manufacturer logo
   const selectedLogoUrl = selectedManufacturer ? getManufacturerLogo(selectedManufacturer.name) : null
@@ -181,6 +232,78 @@ export default function ManufacturerOrdersPage() {
     if (withTracking.length === 0) return
     withTracking.forEach((order) => fetchTracking(order))
   }, [selectedManufacturer?.id, selectedManufacturer?.orders])
+
+  useEffect(() => {
+    if (!selectedManufacturer) {
+      setOrderDocuments({})
+      setLoadingOrderDocuments({})
+      return
+    }
+
+    const orderIds = (selectedManufacturer.orders || []).map((o) => o.id)
+    orderIds.forEach((orderId) => {
+      void fetchOrderDocuments(orderId)
+    })
+  }, [selectedManufacturer?.id, selectedManufacturer?.orders])
+
+  const formatFileSize = (bytes: number) => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+    const units = ['B', 'KB', 'MB', 'GB']
+    const exp = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+    const value = bytes / 1024 ** exp
+    return `${value >= 10 || exp === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[exp]}`
+  }
+
+  const fetchOrderDocuments = async (orderId: string) => {
+    setLoadingOrderDocuments((prev) => ({ ...prev, [orderId]: true }))
+    try {
+      const response = await fetch(`/api/manufacturer-orders/${orderId}/documents`)
+      if (!response.ok) return
+      const data = (await response.json()) as { documents?: OrderDocument[] }
+      setOrderDocuments((prev) => ({ ...prev, [orderId]: data.documents || [] }))
+    } catch (error) {
+      console.error('Error fetching order documents:', error)
+    } finally {
+      setLoadingOrderDocuments((prev) => ({ ...prev, [orderId]: false }))
+    }
+  }
+
+  const uploadOrderDocument = async (orderId: string, file: File) => {
+    setUploadingOrderDocumentId(orderId)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch(`/api/manufacturer-orders/${orderId}/documents`, {
+        method: 'POST',
+        body: formData,
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to upload document')
+      }
+      await fetchOrderDocuments(orderId)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to upload document')
+    } finally {
+      setUploadingOrderDocumentId(null)
+    }
+  }
+
+  const handleOrderDocumentSelected = async (
+    orderId: string,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const allowed = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'])
+    if (!allowed.has(file.type)) {
+      alert('Please upload a PDF, PNG, JPG, or WebP file.')
+      e.target.value = ''
+      return
+    }
+    await uploadOrderDocument(orderId, file)
+    e.target.value = ''
+  }
 
   const applyOrderToInventory = async (order: ManufacturerOrder) => {
     setApplyingOrderId(order.id)
@@ -272,10 +395,10 @@ export default function ManufacturerOrdersPage() {
     try {
       const response = await fetch('/api/inventory')
       if (response.ok) {
-        const data = await response.json()
-        const products = (data.inventory || []).map((item: any) => ({
-          sku: item.sku,
-          name: item.product?.name || item.name || item.sku,
+        const data = await response.json() as { inventory?: Array<{ sku?: string; name?: string; price?: number; product?: { name?: string; price?: number } }> }
+        const products = (data.inventory || []).map((item) => ({
+          sku: item.sku || '',
+          name: item.product?.name || item.name || item.sku || '',
           price: item.product?.price || item.price || 0
         }))
         setInventoryProducts(products)
@@ -316,7 +439,7 @@ export default function ManufacturerOrdersPage() {
         body: formData
       })
 
-      const result = await response.json()
+      const result = await response.json() as ParseDocumentResponse
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to parse document')
@@ -340,7 +463,7 @@ export default function ManufacturerOrdersPage() {
 
         // If items were extracted, add them to the order
         if (data.items && Array.isArray(data.items) && data.items.length > 0) {
-          const newItems: NewOrderItem[] = data.items.map((item: any) => {
+          const newItems: NewOrderItem[] = data.items.map((item) => {
             // Try to match SKU with inventory
             const matchedProduct = inventoryProducts.find(p => 
               p.sku.toLowerCase() === (item.sku || '').toLowerCase() ||
@@ -350,8 +473,8 @@ export default function ManufacturerOrdersPage() {
             return {
               sku: matchedProduct?.sku || item.sku || '',
               product_name: matchedProduct?.name || item.name || item.description || '',
-              quantity: parseInt(item.quantity) || 1,
-              unit_cost: parseFloat(item.unit_cost) || matchedProduct?.price || 0
+              quantity: parseInt(String(item.quantity ?? ''), 10) || 1,
+              unit_cost: parseFloat(String(item.unit_cost ?? '')) || matchedProduct?.price || 0
             }
           })
 
@@ -361,9 +484,9 @@ export default function ManufacturerOrdersPage() {
         // Show what was extracted
         console.log('Extracted data:', data)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Import error:', error)
-      setImportError(error.message || 'Failed to import document')
+      setImportError(error instanceof Error ? error.message : 'Failed to import document')
     } finally {
       setImporting(false)
     }
@@ -372,6 +495,11 @@ export default function ManufacturerOrdersPage() {
   const handleDocumentImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (!hasSupportedImportType(file)) {
+      setImportError('Please upload an image or PDF file')
+      e.target.value = ''
+      return
+    }
     await processImportFile(file)
     // Reset file input
     e.target.value = ''
@@ -397,9 +525,7 @@ export default function ManufacturerOrdersPage() {
     const file = e.dataTransfer.files?.[0]
     if (!file) return
 
-    // Validate file type
-    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif', 'application/pdf']
-    if (!validTypes.includes(file.type)) {
+    if (!hasSupportedImportType(file)) {
       setImportError('Please drop an image or PDF file')
       return
     }
@@ -1053,7 +1179,7 @@ export default function ManufacturerOrdersPage() {
               {incomingOrders.map(order => (
                 <Card 
                   key={order.id} 
-                  className="hover:bg-white/5 transition-all duration-200"
+                  className="bg-white/5"
                   style={colorVariants ? { 
                     borderColor: colorVariants.border,
                     borderWidth: '1px'
@@ -1159,6 +1285,63 @@ export default function ManufacturerOrdersPage() {
                           ${Number(order.total_amount || 0).toLocaleString()}
                         </p>
                       </div>
+                    </div>
+                    <div className="mt-5 pt-4 border-t border-white/10 flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs text-white/50">Documents</p>
+                        <label htmlFor={`order-document-${order.id}`} className="cursor-pointer">
+                          <input
+                            id={`order-document-${order.id}`}
+                            type="file"
+                            accept=".pdf,image/png,image/jpeg,image/jpg,image/webp"
+                            className="hidden"
+                            onChange={(e) => void handleOrderDocumentSelected(order.id, e)}
+                            disabled={uploadingOrderDocumentId === order.id}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="lg"
+                            className="pointer-events-none border-none bg-white/10 hover:bg-white/40"
+                            disabled={uploadingOrderDocumentId === order.id}
+                          >
+                            {uploadingOrderDocumentId === order.id ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                Uploading...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="h-3.5 w-3.5 mr-1.5" />
+                                Add document
+                              </>
+                            )}
+                          </Button>
+                        </label>
+                      </div>
+                      {loadingOrderDocuments[order.id] ? (
+                        <p className="text-xs text-white/40">Loading documents...</p>
+                      ) : (orderDocuments[order.id] || []).length === 0 ? (
+                        <p className="text-xs text-white/40">No documents attached</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {(orderDocuments[order.id] || []).map((doc) => (
+                            <a
+                              key={doc.id}
+                              href={doc.viewUrl || '#'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs text-blue-300 hover:bg-white/5 hover:text-blue-200 transition-colors"
+                            >
+                              <span className="flex items-center gap-1.5 truncate">
+                                <FileText className="h-3.5 w-3.5 shrink-0" />
+                                <span className="truncate">{doc.name}</span>
+                              </span>
+                              <span className="text-white/40 shrink-0">{formatFileSize(doc.size)}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -1279,6 +1462,64 @@ export default function ManufacturerOrdersPage() {
                         <p className="text-sm text-white/60">Total</p>
                         <p className="text-xl font-bold text-white">${Number(order.total_amount || 0).toLocaleString()}</p>
                       </div>
+                    </div>
+                    <div className="mt-5 pt-4 border-t border-white/10 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm text-white/50">Documents</p>
+                        <label htmlFor={`order-document-${order.id}`} className="cursor-pointer">
+                          <input
+                            id={`order-document-${order.id}`}
+                            type="file"
+                            accept=".pdf,image/png,image/jpeg,image/jpg,image/webp"
+                            className="hidden"
+                            onChange={(e) => void handleOrderDocumentSelected(order.id, e)}
+                            disabled={uploadingOrderDocumentId === order.id}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="lg"
+                            className="pointer-events-none border-none bg-white/10 hover:bg-white/40"
+                            disabled={uploadingOrderDocumentId === order.id}
+                          >
+                            {uploadingOrderDocumentId === order.id ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                Uploading...
+                              </>
+                            ) : (
+                              <>
+                                <Paperclip className="h-3.5 w-3.5 mr-1.5" />
+                                Add document
+                              </>
+                            )}
+                          </Button>
+                        </label>
+                      </div>
+                      {loadingOrderDocuments[order.id] ? (
+                        <p className="text-xs text-white/40">Loading documents...</p>
+                      ) : (orderDocuments[order.id] || []).length === 0 ? (
+                        <p className="text-xs text-white/40">No documents attached</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {(orderDocuments[order.id] || []).map((doc) => (
+                            <a
+                              key={doc.id}
+                              href={doc.viewUrl || '#'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs text-blue-300 hover:bg-white/5 hover:text-blue-200 transition-colors"
+                            >
+                              <span className="flex items-center gap-1.5 truncate">
+                                <FileText className="h-3.5 w-3.5 shrink-0" />
+                                <span className="truncate">{doc.name}</span>
+                              </span>
+                              <span className="text-white/40 shrink-0">{formatFileSize(doc.size)}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
