@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowLeft, Package, Truck, Clock, CheckCircle, ChevronRight, ChevronDown, Plus, ExternalLink, RefreshCw, X, Trash2, Upload, Loader2, Search, Paperclip, FileText } from 'lucide-react'
+import { ArrowLeft, Package, Truck, Clock, CheckCircle, ChevronRight, ChevronDown, Plus, ExternalLink, RefreshCw, X, Trash2, Upload, Loader2, Search, Paperclip, FileText, Camera } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -55,6 +55,7 @@ interface OrderDocument {
 interface Manufacturer {
   id: string
   name: string
+  logo_url?: string
   contact_name?: string
   contact_email?: string
   contact_phone?: string
@@ -124,11 +125,13 @@ const manufacturerLogos: Record<string, string> = {
   // Add more manufacturers as needed
 }
 
-const getManufacturerLogo = (name: string): string | null => {
+const getManufacturerLogo = (manufacturer: Pick<Manufacturer, 'name' | 'logo_url'>): string | null => {
+  if (manufacturer.logo_url) return manufacturer.logo_url
+
   // Check exact match first
-  if (manufacturerLogos[name]) return manufacturerLogos[name]
+  if (manufacturerLogos[manufacturer.name]) return manufacturerLogos[manufacturer.name]
   // Check case-insensitive match
-  const lowerName = name.toLowerCase()
+  const lowerName = manufacturer.name.toLowerCase()
   for (const [key, value] of Object.entries(manufacturerLogos)) {
     if (key.toLowerCase() === lowerName) return value
   }
@@ -188,9 +191,11 @@ export default function ManufacturerOrdersPage() {
   const [orderDocuments, setOrderDocuments] = useState<Record<string, OrderDocument[]>>({})
   const [loadingOrderDocuments, setLoadingOrderDocuments] = useState<Record<string, boolean>>({})
   const [uploadingOrderDocumentId, setUploadingOrderDocumentId] = useState<string | null>(null)
+  const [uploadingManufacturerLogo, setUploadingManufacturerLogo] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
 
   // Dynamic color theming based on manufacturer logo
-  const selectedLogoUrl = selectedManufacturer ? getManufacturerLogo(selectedManufacturer.name) : null
+  const selectedLogoUrl = selectedManufacturer ? getManufacturerLogo(selectedManufacturer) : null
   const { dominant: brandColor, vibrant: vibrantColor } = useImageColors(selectedLogoUrl)
   
   // Use vibrant color if available, fallback to dominant
@@ -302,6 +307,44 @@ export default function ManufacturerOrdersPage() {
       return
     }
     await uploadOrderDocument(orderId, file)
+    e.target.value = ''
+  }
+
+  const uploadManufacturerLogo = async (file: File) => {
+    if (!selectedManufacturer) return
+    const allowed = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'])
+    if (!allowed.has(file.type)) {
+      alert('Please upload a PNG, JPG, WEBP, or GIF logo.')
+      return
+    }
+
+    setUploadingManufacturerLogo(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch(`/api/manufacturers/${selectedManufacturer.id}/logo`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload logo')
+      }
+      setSelectedManufacturer((prev) => (prev ? { ...prev, logo_url: data.logo_url } : prev))
+      setManufacturers((prev) =>
+        prev.map((m) => (m.id === selectedManufacturer.id ? { ...m, logo_url: data.logo_url } : m))
+      )
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to upload logo')
+    } finally {
+      setUploadingManufacturerLogo(false)
+    }
+  }
+
+  const handleLogoFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await uploadManufacturerLogo(file)
     e.target.value = ''
   }
 
@@ -752,21 +795,55 @@ export default function ManufacturerOrdersPage() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            {getManufacturerLogo(selectedManufacturer.name) ? (
-              <div className="w-14 h-14 flex items-center justify-center overflow-hidden flex-shrink-0">
+            {getManufacturerLogo(selectedManufacturer) ? (
+              <button
+                type="button"
+                onClick={() => logoInputRef.current?.click()}
+                className="relative w-14 h-14 flex items-center justify-center overflow-hidden flex-shrink-0 group"
+                title="Change manufacturer logo"
+                disabled={uploadingManufacturerLogo}
+              >
                 <Image
-                  src={getManufacturerLogo(selectedManufacturer.name)!}
+                  src={getManufacturerLogo(selectedManufacturer)!}
                   alt={`${selectedManufacturer.name} logo`}
                   width={56}
                   height={56}
                   className="object-contain"
                 />
-              </div>
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors rounded-md flex items-center justify-center">
+                  {uploadingManufacturerLogo ? (
+                    <Loader2 className="h-4 w-4 text-white animate-spin" />
+                  ) : (
+                    <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  )}
+                </div>
+              </button>
             ) : (
-              <div className="w-14 h-14 rounded-lg bg-white/10 flex items-center justify-center">
-                <Package className="h-7 w-7 text-white/60" />
-              </div>
+              <button
+                type="button"
+                onClick={() => logoInputRef.current?.click()}
+                className="relative w-14 h-14 rounded-lg bg-white/10 flex items-center justify-center group"
+                title="Upload manufacturer logo"
+                disabled={uploadingManufacturerLogo}
+              >
+                {uploadingManufacturerLogo ? (
+                  <Loader2 className="h-5 w-5 text-white animate-spin" />
+                ) : (
+                  <Package className="h-7 w-7 text-white group-hover:opacity-0 transition-opacity" />
+                )}
+                {!uploadingManufacturerLogo && (
+                  <Camera className="absolute h-7 w-7 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                )}
+              </button>
             )}
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+              className="hidden"
+              onChange={handleLogoFileSelected}
+              disabled={uploadingManufacturerLogo}
+            />
             <div>
               <h1 
                 className="text-3xl font-bold"
@@ -786,11 +863,10 @@ export default function ManufacturerOrdersPage() {
           </div>
           <Button 
             onClick={openNewOrderModal}
-            className="transition-opacity hover:opacity-70"
+            className="transition-opacity border-none bg-white/10 hover:bg-white/20"
             style={colorVariants ? { 
               backgroundColor: colorVariants.base,
               color: colorVariants.text,
-              borderColor: '#181818'
             } : undefined}
           >
             <Plus className="h-5 w-5 mr-2" />
@@ -1714,10 +1790,10 @@ export default function ManufacturerOrdersPage() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    {getManufacturerLogo(manufacturer.name) ? (
+                    {getManufacturerLogo(manufacturer) ? (
                       <div className="w-12 h-12 flex items-center justify-center overflow-hidden flex-shrink-0">
                         <Image
-                          src={getManufacturerLogo(manufacturer.name)!}
+                          src={getManufacturerLogo(manufacturer)!}
                           alt={`${manufacturer.name} logo`}
                           width={48}
                           height={48}

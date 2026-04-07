@@ -1,5 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabase, supabaseAdmin } from '@/lib/supabase'
+
+const LOGO_BUCKET = 'manufacturer-logos'
+
+async function getManufacturerLogoUrl(manufacturerId: string): Promise<string | null> {
+  const { data: files, error } = await supabaseAdmin.storage
+    .from(LOGO_BUCKET)
+    .list(manufacturerId, {
+      limit: 50,
+      sortBy: { column: 'updated_at', order: 'desc' },
+    })
+
+  if (error || !files || files.length === 0) {
+    return null
+  }
+
+  const preferred =
+    files.find((f) => f.name.startsWith('logo.')) ||
+    files.find((f) => /\.(png|jpe?g|webp|gif)$/i.test(f.name)) ||
+    files[0]
+
+  const { data } = supabaseAdmin.storage
+    .from(LOGO_BUCKET)
+    .getPublicUrl(`${manufacturerId}/${preferred.name}`)
+
+  return data.publicUrl || null
+}
 
 export async function GET(
   request: NextRequest,
@@ -35,7 +61,7 @@ export async function GET(
 
     // Fetch all order items
     const orderIds = (orders || []).map(o => o.id)
-    let orderItems: any[] = []
+    let orderItems: Array<{ order_id: string }> = []
     
     if (orderIds.length > 0) {
       const { data: items, error: itemsError } = await supabase
@@ -54,8 +80,11 @@ export async function GET(
       items: orderItems.filter(item => item.order_id === order.id)
     }))
 
+    const logoUrl = await getManufacturerLogoUrl(id)
+
     return NextResponse.json({
       ...manufacturer,
+      logo_url: logoUrl,
       orders: ordersWithItems
     })
   } catch (error) {

@@ -1,5 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabase, supabaseAdmin } from '@/lib/supabase'
+
+const LOGO_BUCKET = 'manufacturer-logos'
+
+async function getManufacturerLogoUrl(manufacturerId: string): Promise<string | null> {
+  const { data: files, error } = await supabaseAdmin.storage
+    .from(LOGO_BUCKET)
+    .list(manufacturerId, {
+      limit: 50,
+      sortBy: { column: 'updated_at', order: 'desc' },
+    })
+
+  if (error || !files || files.length === 0) {
+    return null
+  }
+
+  const preferred =
+    files.find((f) => f.name.startsWith('logo.')) ||
+    files.find((f) => /\.(png|jpe?g|webp|gif)$/i.test(f.name)) ||
+    files[0]
+
+  const { data } = supabaseAdmin.storage
+    .from(LOGO_BUCKET)
+    .getPublicUrl(`${manufacturerId}/${preferred.name}`)
+
+  return data.publicUrl || null
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,7 +71,7 @@ export async function GET(request: NextRequest) {
 
       // Fetch all order items
       const orderIds = (orders || []).map(o => o.id)
-      let orderItems: any[] = []
+      let orderItems: Array<{ order_id: string }> = []
       
       if (orderIds.length > 0) {
         const { data: items, error: itemsError } = await supabase
@@ -64,23 +90,52 @@ export async function GET(request: NextRequest) {
         items: orderItems.filter(item => item.order_id === order.id)
       }))
 
-      // Attach orders to manufacturers
+      const logoEntries = await Promise.all(
+        manufacturers.map(async (manufacturer) => ({
+          id: manufacturer.id,
+          logoUrl: await getManufacturerLogoUrl(manufacturer.id),
+        }))
+      )
+      const logoById = new Map(logoEntries.map((e) => [e.id, e.logoUrl]))
+
+      // Attach orders and logos to manufacturers
       const manufacturersWithOrders = manufacturers.map(manufacturer => ({
         ...manufacturer,
+        logo_url: logoById.get(manufacturer.id) || null,
         orders: ordersWithItems.filter(order => order.manufacturer_id === manufacturer.id)
       }))
 
       return NextResponse.json(manufacturersWithOrders)
     }
 
-    return NextResponse.json(manufacturers || [])
-  } catch (error: any) {
+    if (!manufacturers || manufacturers.length === 0) {
+      return NextResponse.json([])
+    }
+
+    const manufacturersWithLogos = await Promise.all(
+      manufacturers.map(async (manufacturer) => ({
+        ...manufacturer,
+        logo_url: await getManufacturerLogoUrl(manufacturer.id),
+      }))
+    )
+
+    return NextResponse.json(manufacturersWithLogos)
+  } catch (error: unknown) {
+    const errorDetails =
+      error && typeof error === 'object'
+        ? (error as { message?: string; details?: string }).details ||
+          (error as { message?: string }).message
+        : undefined
+    const errorCode =
+      error && typeof error === 'object'
+        ? (error as { code?: string }).code
+        : undefined
     console.error('Error fetching manufacturers:', error)
     return NextResponse.json(
       { 
         error: 'Failed to fetch manufacturers', 
-        details: error?.message || error?.details || JSON.stringify(error) || 'Unknown error',
-        code: error?.code
+        details: errorDetails || JSON.stringify(error) || 'Unknown error',
+        code: errorCode
       },
       { status: 500 }
     )
