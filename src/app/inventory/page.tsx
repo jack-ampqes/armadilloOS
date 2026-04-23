@@ -560,6 +560,7 @@ export default function InventoryPage() {
                 <TableBody>
                   {displayedProducts.map((product) => {
                     const stockStatus = getStockStatus(product)
+                    const isOutOfStock = (product.inventory?.quantity || 0) === 0
                     const filtered = getFilteredProducts()
                     const sorted = getSortedProducts(filtered)
                     const lineNumber = sorted.findIndex(p => p.id === product.id) + 1
@@ -571,7 +572,9 @@ export default function InventoryPage() {
                     return (
                       <TableRow 
                         key={product.id}
-                        className="cursor-pointer hover:bg-white/5 transition-colors"
+                        className={`cursor-pointer transition-colors ${
+                          isOutOfStock ? 'bg-red-500/15 hover:bg-red-500/25' : 'hover:bg-white/5'
+                        }`}
                         onClick={() => router.push(`/inventory/${product.id}`)}
                       >
                         <TableCell className="text-white/60 font-mono">
