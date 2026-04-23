@@ -573,7 +573,7 @@ export default function InventoryPage() {
                       <TableRow 
                         key={product.id}
                         className={`cursor-pointer transition-colors ${
-                          isOutOfStock ? 'bg-red-500/15 hover:bg-red-500/25' : 'hover:bg-white/5'
+                          isOutOfStock ? 'bg-red-500/6 hover:bg-red-500/10' : 'hover:bg-white/5'
                         }`}
                         onClick={() => router.push(`/inventory/${product.id}`)}
                       >
