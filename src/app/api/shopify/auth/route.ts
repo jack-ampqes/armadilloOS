@@ -21,6 +21,27 @@ function isValidShopDomain(shopDomain: string): boolean {
   return /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(shopDomain)
 }
 
+function resolveAppOrigin(requestOrigin: string, appUrl?: string): string {
+  const normalizedRequestOrigin = requestOrigin.replace(/\/+$/, '')
+  const normalizedAppUrl = appUrl?.replace(/\/+$/, '')
+  if (!normalizedAppUrl) return normalizedRequestOrigin
+
+  try {
+    const parsed = new URL(normalizedAppUrl)
+    // Never force localhost callback when request came from a real host (e.g. Vercel).
+    if (
+      (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
+      !normalizedRequestOrigin.includes('localhost') &&
+      !normalizedRequestOrigin.includes('127.0.0.1')
+    ) {
+      return normalizedRequestOrigin
+    }
+    return parsed.origin
+  } catch {
+    return normalizedRequestOrigin
+  }
+}
+
 export async function GET(request: NextRequest) {
   const apiKey = process.env.SHOPIFY_API_KEY
   const appUrl = process.env.SHOPIFY_APP_URL
@@ -66,8 +87,7 @@ export async function GET(request: NextRequest) {
   }
 
   const state = crypto.randomBytes(16).toString('hex')
-  const origin =
-    appUrl?.replace(/\/+$/, '') || request.nextUrl.origin.replace(/\/+$/, '')
+  const origin = resolveAppOrigin(request.nextUrl.origin, appUrl)
   const redirectUri = `${origin}/api/shopify/callback`
 
   const authUrl = new URL(`https://${shop}/admin/oauth/authorize`)
