@@ -2,7 +2,10 @@
 
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Inconsolata } from 'next/font/google'
 import { Loader2, Sparkles, Send } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { usePermissions } from '@/lib/usePermissions'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,6 +16,7 @@ type Message = {
 }
 
 const MAX_TEXTAREA_HEIGHT = 180
+const inconsolata = Inconsolata({ subsets: ['latin'] })
 
 export default function ArmadilloIntelligencePage() {
   const router = useRouter()
@@ -110,13 +114,80 @@ export default function ArmadilloIntelligencePage() {
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap shadow-sm ${
+                  className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-2.5 text-lg leading-relaxed shadow-sm ${
                     message.role === 'user'
-                      ? 'bg-[#ffdc6b] text-black rounded-br-sm'
-                      : 'bg-white/10 text-white rounded-bl-sm'
+                      ? 'bg-[#ffdc6b] text-black rounded-br-sm whitespace-pre-wrap text-lg'
+                      : `bg-white/10 text-white rounded-bl-sm armadillo-markdown text-base ${inconsolata.className}`
                   }`}
                 >
-                  {message.content}
+                  {message.role === 'assistant' ? (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                        ul: ({ children }) => <ul className="list-disc pl-5 mb-2 last:mb-0 space-y-1">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 last:mb-0 space-y-1">{children}</ol>,
+                        li: ({ children }) => <li className="marker:text-white/60">{children}</li>,
+                        strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+                        em: ({ children }) => <em className="italic">{children}</em>,
+                        h1: ({ children }) => <h1 className="text-base font-semibold mb-2">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-base font-semibold mb-2">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-sm font-semibold mb-2">{children}</h3>,
+                        a: ({ href, children }) => (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#ffdc6b] underline underline-offset-2 hover:text-[#ffdc6b]/80"
+                          >
+                            {children}
+                          </a>
+                        ),
+                        code: ({ className, children, ...props }) => {
+                          const isInline = !className
+                          if (isInline) {
+                            return (
+                              <code
+                                className="rounded bg-black/40 px-1 py-0.5 text-[0.8125rem] font-mono text-white"
+                                {...props}
+                              >
+                                {children}
+                              </code>
+                            )
+                          }
+                          return (
+                            <code className={`${className ?? ''} font-mono text-[0.8125rem]`} {...props}>
+                              {children}
+                            </code>
+                          )
+                        },
+                        pre: ({ children }) => (
+                          <pre className="mb-2 last:mb-0 overflow-x-auto rounded-lg bg-black/40 p-3 text-xs">
+                            {children}
+                          </pre>
+                        ),
+                        blockquote: ({ children }) => (
+                          <blockquote className="border-l-2 border-white/30 pl-3 italic text-white/80 mb-2 last:mb-0">
+                            {children}
+                          </blockquote>
+                        ),
+                        hr: () => <hr className="my-3 border-white/15" />,
+                        table: ({ children }) => (
+                          <div className="overflow-x-auto mb-2 last:mb-0">
+                            <table className="min-w-full text-xs border border-white/15">{children}</table>
+                          </div>
+                        ),
+                        th: ({ children }) => (
+                          <th className="border border-white/15 px-2 py-1 text-left font-semibold">{children}</th>
+                        ),
+                        td: ({ children }) => <td className="border border-white/15 px-2 py-1 align-top">{children}</td>,
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                  ) : (
+                    <span className="whitespace-pre-wrap">{message.content}</span>
+                  )}
                 </div>
               </div>
             ))}
