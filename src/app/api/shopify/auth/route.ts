@@ -18,7 +18,8 @@ function normalizeShopDomain(input: string): string {
 }
 
 function isValidShopDomain(shopDomain: string): boolean {
-  return /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(shopDomain)
+  // OAuth should use the canonical Shopify admin shop domain, not the public storefront domain.
+  return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(shopDomain)
 }
 
 function resolveAppOrigin(requestOrigin: string, appUrl?: string): string {
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
       {
         error: 'Invalid shop',
         message:
-          'Provide a valid shop domain (e.g. "your-store.myshopify.com") as ?shop=',
+          'Provide your Shopify admin shop domain (e.g. "your-store.myshopify.com"), not your public storefront domain.',
       },
       { status: 400 }
     )

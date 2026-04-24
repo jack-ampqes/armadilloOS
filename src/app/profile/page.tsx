@@ -192,7 +192,11 @@ function ProfilePageContent() {
     setShopifyError('')
     const userEmail = localStorage.getItem('user_email') || ''
     if (!shopDomain.trim()) {
-      setShopifyError('Enter your shop domain (e.g. "your-store.myshopify.com")')
+      setShopifyError('Enter your Shopify admin domain (e.g. "65e24b-4.myshopify.com")')
+      return
+    }
+    if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(shopDomain.trim())) {
+      setShopifyError('Use your .myshopify.com admin domain, not your public storefront domain.')
       return
     }
     if (!userEmail) {
@@ -708,15 +712,18 @@ function ProfilePageContent() {
                   <div className="mt-4 space-y-4 pl-7">
                     <div>
                       <Label htmlFor="shopDomain" className="text-white">
-                        Shop domain
+                        Shopify admin domain
                       </Label>
                       <Input
                         id="shopDomain"
                         value={shopDomain}
                         onChange={(e) => setShopDomain(e.target.value)}
                         className="bg-white/10 border-white/20 text-white mt-1"
-                        placeholder='your-store.myshopify.com'
+                        placeholder='65e24b-4.myshopify.com'
                       />
+                      <p className="text-white/40 text-xs mt-2">
+                        Use the <span className="text-white/70">.myshopify.com</span> admin domain, not armadillosafe.com.
+                      </p>
                       {shopifyStatus?.connected && shopifyStatus.shop && (
                         <p className="text-white/40 text-xs mt-2">
                           Connected to <span className="text-white/70">{shopifyStatus.shop}</span>

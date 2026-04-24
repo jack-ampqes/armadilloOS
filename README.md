@@ -53,6 +53,7 @@ A comprehensive management software for Armadillo Safety Products to manage orde
    # supabaseTable/shopify_inventory_mappings.sql
    #
    # Option B (legacy/dev fallback): single-store token via env
+   # Use the Shopify admin domain, not the public storefront domain.
    SHOPIFY_STORE_DOMAIN=your-store.myshopify.com
    SHOPIFY_ACCESS_TOKEN=your_shopify_admin_api_access_token
    #
