@@ -172,7 +172,7 @@ type ShopifyOrderRow = {
   name?: string
   created_at?: string
   financial_status?: string
-  fulfillment_status?: string
+  fulfillment_status?: string | null
   total_price?: string | number
   customer_email?: string | null
   line_items: ShopifyLineItem[]
