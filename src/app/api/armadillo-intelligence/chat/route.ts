@@ -62,14 +62,14 @@ function normalizeMessages(input: unknown): ChatMessage[] {
 
 async function safeFetch<T>(
   name: string,
-  query: Promise<{ data: T[] | null; error: { message?: string } | null }>
-) {
+  query: PromiseLike<{ data: T[] | null; error: { message?: string } | null }>
+): Promise<T[]> {
   const result = await query
   if (result.error) {
     console.warn(`[Armadillo Intelligence] Failed to load ${name}: ${result.error.message || 'Unknown error'}`)
-    return [] as T[]
+    return []
   }
-  return result.data ?? ([] as T[])
+  return result.data ?? []
 }
 
 async function fetchContextSnapshot() {
