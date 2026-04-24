@@ -14,12 +14,43 @@ import { CirclePile, OctagonAlert, OctagonX } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { usePermissions } from '@/lib/usePermissions'
+import { parseSkuToProduct } from '@/lib/sku-parser'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+
+const CLASS_ORDER = ['00', '0', '1', '2', '3', '4']
+
+const classRank = (code?: string) => {
+  if (!code) return Number.MAX_SAFE_INTEGER
+  const index = CLASS_ORDER.indexOf(code)
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index
+}
+
+const compareBySkuStructure = (a: Product, b: Product) => {
+  const pa = parseSkuToProduct(a.sku || '')
+  const pb = parseSkuToProduct(b.sku || '')
+
+  const fam = (pa.familyCode || '').localeCompare(pb.familyCode || '')
+  if (fam !== 0) return fam
+
+  const cls = classRank(pa.classCode) - classRank(pb.classCode)
+  if (cls !== 0) return cls
+
+  const inch = (pa.inches ?? 0) - (pb.inches ?? 0)
+  if (inch !== 0) return inch
+
+  const color = (pa.colorName || '').localeCompare(pb.colorName || '')
+  if (color !== 0) return color
+
+  const size = parseFloat(pa.size ?? '0') - parseFloat(pb.size ?? '0')
+  if (size !== 0) return size
+
+  return (a.sku || '').localeCompare(b.sku || '')
+}
 
 interface Product {
   id: string
@@ -55,6 +86,7 @@ export default function InventoryPage() {
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [displayedProducts, setDisplayedProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filter, setFilter] = useState('all') // all, low-stock, out-of-stock
@@ -86,12 +118,20 @@ export default function InventoryPage() {
   }, [page])
 
   useEffect(() => {
-    // Reset to first page when filter, sort, or search changes
+    // Reset to first page when user-driven filter, sort, or search changes
     setPage(1)
     const filtered = getFilteredProducts()
     const sorted = getSortedProducts(filtered)
     setDisplayedProducts(sorted.slice(0, PRODUCTS_PER_PAGE))
-  }, [filter, sortBy, sortOrder, searchQuery, allProducts])
+  }, [filter, sortBy, sortOrder, searchQuery])
+
+  useEffect(() => {
+    // When allProducts changes (e.g. after a background refresh),
+    // preserve the current page depth so the user's scroll position is maintained.
+    const filtered = getFilteredProducts()
+    const sorted = getSortedProducts(filtered)
+    setDisplayedProducts(sorted.slice(0, page * PRODUCTS_PER_PAGE))
+  }, [allProducts])
 
   useEffect(() => {
     // Set up infinite scroll
@@ -108,8 +148,9 @@ export default function InventoryPage() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [loadingMore, displayedProducts, allProducts, filter])
 
-  const fetchProducts = async () => {
-    setLoading(true)
+  const fetchProducts = async ({ background = false }: { background?: boolean } = {}) => {
+    if (background) setRefreshing(true)
+    else setLoading(true)
     try {
       const response = await fetch('/api/inventory')
       if (response.ok) {
@@ -151,7 +192,8 @@ export default function InventoryPage() {
       setAllProducts([])
       setDisplayedProducts([])
     } finally {
-      setLoading(false)
+      if (background) setRefreshing(false)
+      else setLoading(false)
     }
   }
 
@@ -188,7 +230,7 @@ export default function InventoryPage() {
           comparison = a.name.localeCompare(b.name)
           break
         case 'sku':
-          comparison = a.sku.localeCompare(b.sku)
+          comparison = compareBySkuStructure(a, b)
           break
         case 'price':
           comparison = a.price - b.price
@@ -339,8 +381,8 @@ export default function InventoryPage() {
         throw new Error(errorData.error || 'Failed to update stock')
       }
 
-      // Refresh the products list
-      await fetchProducts()
+      // Refresh the products list without unmounting the page (keeps scroll position)
+      await fetchProducts({ background: true })
       setStockDialogOpen(false)
       if (historyOpen) fetchHistory()
       setQuantityInput('')
@@ -390,12 +432,12 @@ export default function InventoryPage() {
               <Button 
                 variant="outline" 
                 size="icon"
-                onClick={() => fetchProducts()}
-                disabled={loading}
+                onClick={() => fetchProducts({ background: true })}
+                disabled={refreshing}
                 title="Refresh inventory"
                 className="group"
               >
-                <RefreshCw className={`h-5 w-5 transition-transform duration-300 ${loading ? 'animate-spin' : 'group-hover:rotate-180'}`} />
+                <RefreshCw className={`h-5 w-5 transition-transform duration-300 ${refreshing ? 'animate-spin' : 'group-hover:rotate-180'}`} />
               </Button>
             </>
           )}
