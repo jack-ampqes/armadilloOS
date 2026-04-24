@@ -19,7 +19,8 @@ import {
   AlertTriangle,
   ShieldUser,
   FileStack,
-  Building2
+  Building2,
+  Sparkles
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -43,9 +44,11 @@ const navigation = [
   { name: 'Company Profiles', href: '/admin/companies', icon: Building2 },
 ]
 
+const intelligenceNav = { name: 'Armadillo Intelligence', href: '/armadillo-intelligence', icon: Sparkles }
+
 /** Sidebar nav items allowed per role. Others are hidden and routes are protected in middleware. */
 const ALLOWED_NAV_BY_ROLE: Record<Role, Set<string>> = {
-  Admin: new Set(navigation.map((n) => n.href)),
+  Admin: new Set([...navigation.map((n) => n.href), intelligenceNav.href]),
   'Sales Rep': new Set(['/', '/inventory', '/alerts']),
   Distributor: new Set(['/', '/inventory', '/alerts']),
   Technician: new Set(['/', '/inventory', '/alerts']),
@@ -200,8 +203,8 @@ export default function Navigation() {
       </div>
 
       {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 z-40 bg-[#181818] border-r border-white/20 pt-6 w-[280px] hidden lg:block">
-        <div className="flex flex-col h-full">
+      <aside className="fixed left-0 top-0 bottom-0 z-40 bg-[#181818] border-r border-white/20 pt-6 w-[280px] hidden lg:block overflow-y-auto sidebar-scroll">
+        <div className="flex flex-col min-h-full">
           {/* Logo */}
           <div className="px-6 mb-8 flex items-center justify-between relative" ref={desktopSignOutRef}>
             <button
@@ -241,7 +244,7 @@ export default function Navigation() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 min-h-0 px-5 overflow-y-auto sidebar-scroll">
+          <nav className="flex-1 px-5">
             {navigation.map((item, index) => {
               if (!canShowNavItem(item.href, role)) return null
 
@@ -275,6 +278,41 @@ export default function Navigation() {
             })}
           </nav>
 
+          {canShowNavItem(intelligenceNav.href, role) && (
+            <div className="px-5 pb-4">
+              <Link href={intelligenceNav.href} className="block">
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{
+                    opacity: 1,
+                    y: 0,
+                    boxShadow: [
+                      '0 0 0 rgba(231,255,107,0.20)',
+                      '0 0 18px rgba(231,255,107,0.35)',
+                      '0 0 0 rgba(231,255,107,0.20)',
+                    ],
+                  }}
+                  transition={{
+                    opacity: { duration: 0.25 },
+                    y: { duration: 0.25 },
+                    boxShadow: { duration: 2.6, repeat: Infinity, ease: 'easeInOut' },
+                  }}
+                  className={cn(
+                    'rounded-xl border px-4 py-3 text-sm font-semibold transition-all duration-200 pulse-intelligence',
+                    pathname === intelligenceNav.href
+                      ? 'border-[#ffdc6b] bg-transparent text-white'
+                      : 'border-[#ffdc6b]/40 bg-transparent text-white hover:bg-white/10'
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <intelligenceNav.icon className="w-5 h-5 flex-shrink-0" />
+                    <span className="truncate">{intelligenceNav.name}</span>
+                  </div>
+                </motion.div>
+              </Link>
+            </div>
+          )}
+
           {/* Footer */}
           <div className="p-6">
             <div className="text-xs text-white/60 text-center">
@@ -299,11 +337,11 @@ export default function Navigation() {
             animate={{ x: 0 }}
             exit={{ x: -280 }}
             transition={{ duration: 0.3 }}
-            className="lg:hidden fixed left-0 top-0 bottom-0 z-40 bg-[#181818] border-r border-white/20 pt-20 w-[280px]"
+            className="lg:hidden fixed left-0 top-0 bottom-0 z-40 bg-[#181818] border-r border-white/20 pt-20 w-[280px] overflow-y-auto sidebar-scroll"
           >
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col min-h-full">
               {/* Navigation */}
-              <nav className="flex-1 min-h-0 px-4 space-y-2 overflow-y-auto sidebar-scroll">
+              <nav className="flex-1 px-4 space-y-2">
                 {navigation.map((item, index) => {
                   if (!canShowNavItem(item.href, role)) return null
                   const isActive = pathname === item.href
@@ -342,6 +380,41 @@ export default function Navigation() {
                 })}
               </nav>
 
+              {canShowNavItem(intelligenceNav.href, role) && (
+                <div className="px-4 pb-4">
+                  <Link href={intelligenceNav.href} onClick={() => setMobileMenuOpen(false)}>
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{
+                        opacity: 1,
+                        y: 0,
+                        boxShadow: [
+                          '0 0 0 rgba(231,255,107,0.20)',
+                          '0 0 14px rgba(231,255,107,0.32)',
+                          '0 0 0 rgba(231,255,107,0.20)',
+                        ],
+                      }}
+                      transition={{
+                        opacity: { duration: 0.25 },
+                        y: { duration: 0.25 },
+                        boxShadow: { duration: 2.4, repeat: Infinity, ease: 'easeInOut' },
+                      }}
+                      className={cn(
+                        'rounded-xl border px-4 py-3 text-sm font-semibold pulse-intelligence',
+                        pathname === intelligenceNav.href
+                          ? 'border-[#ffdc6b] bg-transparent text-white'
+                          : 'border-[#ffdc6b]/40 bg-transparent text-white hover:bg-white/10'
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <intelligenceNav.icon className="w-5 h-5 flex-shrink-0" />
+                        <span className="truncate">{intelligenceNav.name}</span>
+                      </div>
+                    </motion.div>
+                  </Link>
+                </div>
+              )}
+
               {/* Footer */}
               <div className="p-6">
                 <div className="text-xs text-white/60 text-center">
@@ -360,6 +433,18 @@ export default function Navigation() {
         .sidebar-scroll::-webkit-scrollbar {
           width: 0;
           height: 0;
+        }
+        .pulse-intelligence {
+          animation: pulse-intelligence 2.6s ease-in-out infinite;
+          will-change: filter;
+        }
+        @keyframes pulse-intelligence {
+          0%, 100% {
+            filter: brightness(1);
+          }
+          50% {
+            filter: brightness(1.06);
+          }
         }
       `}</style>
     </>
