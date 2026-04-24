@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { requirePermission } from '@/lib/auth'
 import { checkLowStockAlerts } from '@/lib/alerts'
+import { syncSkuQuantityToShopify } from '@/lib/shopify-inventory-sync'
 
 /**
  * POST /api/manufacturer-orders/[id]/apply-to-inventory
@@ -54,6 +55,14 @@ export async function POST(
 
     const skipped: string[] = []
     const applied: { sku: string; quantity: number }[] = []
+    const shopifySync: Array<{
+      sku: string
+      ok: boolean
+      message?: string
+      inventoryItemId?: number
+      locationId?: number
+      source?: 'mapping' | 'resolved'
+    }> = []
 
     for (const item of items) {
       const sku = item.sku
@@ -99,6 +108,12 @@ export async function POST(
           user_id: user.id,
           user_email: user.email,
         })
+
+      const syncResult = await syncSkuQuantityToShopify({
+        sku,
+        quantity: quantityAfter,
+      })
+      shopifySync.push(syncResult)
     }
 
     const { error: updateOrderErr } = await supabase
@@ -128,6 +143,7 @@ export async function POST(
     return NextResponse.json({
       applied: true,
       appliedItems: applied,
+      shopifySync,
       skippedSkus: skipped.length ? skipped : undefined,
     })
   } catch (error) {

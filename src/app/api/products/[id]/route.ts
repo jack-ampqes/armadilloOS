@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { getProduct as getShopifyProduct } from '@/lib/shopify'
 import { parseSkuToProduct } from '@/lib/sku-parser'
 import { getDefaultShopifyCredentials } from '@/lib/shopify-connection'
+import { syncSkuQuantityToShopify } from '@/lib/shopify-inventory-sync'
 
 export async function GET(
   request: NextRequest,
@@ -215,6 +216,14 @@ export async function PUT(
       inventory_sku: sku
     })
 
+    let shopifySync = null
+    if (quantity !== undefined) {
+      shopifySync = await syncSkuQuantityToShopify({
+        sku,
+        quantity: Number(quantity) || 0,
+      })
+    }
+
     // Return updated product
     const response = {
       id: productData.sku,
@@ -226,7 +235,8 @@ export async function PUT(
       leadtime: productData.leadtime,
       inventory: inventoryData && inventoryData.length > 0 ? {
         quantity: inventoryData[0].quantity || 0
-      } : null
+      } : null,
+      shopifySync
     }
 
     return NextResponse.json(response)

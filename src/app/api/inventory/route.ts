@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { parseSkuToProduct } from '@/lib/sku-parser'
 import { checkLowStockAlerts } from '@/lib/alerts'
 import { requirePermission } from '@/lib/auth'
+import { syncSkuQuantityToShopify } from '@/lib/shopify-inventory-sync'
 
 export async function GET(request: NextRequest) {
   const auth = requirePermission(request, 'InventoryViewing')
@@ -207,7 +208,18 @@ export async function POST(request: NextRequest) {
       // Don't fail the request if alert check fails
     }
 
-    return NextResponse.json(transformedInventory, { status: 201 })
+    const shopifySync = await syncSkuQuantityToShopify({
+      sku,
+      quantity: transformedInventory.quantity ?? 0,
+    })
+
+    return NextResponse.json(
+      {
+        ...transformedInventory,
+        shopifySync,
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error('Error updating inventory:', error)
     return NextResponse.json(

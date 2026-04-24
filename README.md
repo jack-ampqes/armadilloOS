@@ -44,10 +44,13 @@ A comprehensive management software for Armadillo Safety Products to manage orde
    SHOPIFY_API_KEY=your_shopify_app_client_id
    SHOPIFY_API_SECRET=your_shopify_app_client_secret
    SHOPIFY_APP_URL=http://localhost:3000
-   SHOPIFY_APP_SCOPES=read_orders,read_products,read_inventory,read_customers
+   SHOPIFY_APP_SCOPES=read_orders,read_products,read_inventory,write_inventory,read_customers
+   # Optional: pin which Shopify location receives stock updates.
+   SHOPIFY_LOCATION_ID=123456789
    #
    # Also create the Supabase table defined in:
    # supabaseTable/shopify_connections.sql
+   # supabaseTable/shopify_inventory_mappings.sql
    #
    # Option B (legacy/dev fallback): single-store token via env
    SHOPIFY_STORE_DOMAIN=your-store.myshopify.com
