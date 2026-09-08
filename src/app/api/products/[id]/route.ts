@@ -4,6 +4,8 @@ import { getProduct as getShopifyProduct } from '@/lib/shopify'
 import { parseSkuToProduct } from '@/lib/sku-parser'
 import { getDefaultShopifyCredentials } from '@/lib/shopify-connection'
 import { syncSkuQuantityToShopify } from '@/lib/shopify-inventory-sync'
+import { requirePermission } from '@/lib/auth'
+import { checkLowStockAlerts } from '@/lib/alerts'
 
 export async function GET(
   request: NextRequest,
@@ -163,79 +165,118 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = requirePermission(request, 'InventoryEditing')
+  if ('response' in auth) {
+    return auth.response
+  }
+  const { user } = auth
+
   try {
     const { id: sku } = await params
     const body = await request.json()
-    const { name, description, price, color, leadtime, quantity, minStock, location } = body
+    const { description, price, color, leadtime, quantity, minStock, location } = body
 
-    // Update product in armadillo_inventory.products table using RPC function
-    const { data: productDataArray, error: productError } = await supabase.rpc('update_product', {
-      product_sku: sku,
-      product_name: name,
-      product_description: description || null,
-      product_price: price || 0,
-      product_color: color || null,
-      product_leadtime: leadtime || null
-    })
+    // Product details and stock both live in armadillo_inventory.inventory.
+    // (There is no armadillo_inventory.products table - the old update_product /
+    // upsert_inventory RPCs pointed at one and always failed.)
+    const { data: existing, error: fetchError } = await supabase
+      .schema('armadillo_inventory')
+      .from('inventory')
+      .select('*')
+      .eq('sku', sku)
+      .single()
 
-    if (productError) {
-      console.error('Error updating product:', productError)
-      return NextResponse.json(
-        { error: 'Failed to update product: ' + productError.message },
-        { status: 500 }
-      )
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      throw fetchError
     }
 
-    const productData = productDataArray?.[0] // RPC returns array, get first item
-    if (!productData) {
+    if (!existing) {
       return NextResponse.json(
         { error: 'Product not found' },
         { status: 404 }
       )
     }
 
-    // Update inventory if provided using RPC function
-    if (quantity !== undefined) {
-      const { error: inventoryError } = await supabase.rpc('upsert_inventory', {
-        inventory_name: name || null,
-        inventory_sku: sku,
-        inventory_quantity: quantity !== undefined ? quantity : null,
-        inventory_updated_at: null, // Will use NOW() in function
-        inventory_price: price !== undefined ? price : null,
-        inventory_color: color || null,
-        inventory_leadtime: leadtime || null
-      })
-      
-      if (inventoryError) {
-        console.error('Error updating inventory:', inventoryError)
-      }
+    const updates: Record<string, unknown> = {
+      updated_at: new Date().toISOString()
     }
 
-    // Fetch updated inventory using RPC function
-    const { data: inventoryData } = await supabase.rpc('get_inventory_by_sku', {
-      inventory_sku: sku
-    })
+    // NOTE: inventory.name is a legacy uuid column, not the display name - never
+    // write the product title into it. Display names are derived from the SKU.
+    if (price !== undefined) updates.price = price
+    if (color !== undefined) updates.color = color || null
+    if (leadtime !== undefined) updates.leadtime = leadtime || null
+    if (quantity !== undefined) updates.quantity = quantity
+
+    // These columns only exist in some environments - only write them when present.
+    if (description !== undefined && 'description' in existing) updates.description = description || null
+    if (minStock !== undefined && 'min_stock' in existing) updates.min_stock = minStock
+    if (location !== undefined && 'location' in existing) updates.location = location || null
+
+    const { data: updated, error: updateError } = await supabase
+      .schema('armadillo_inventory')
+      .from('inventory')
+      .update(updates)
+      .eq('sku', sku)
+      .select()
+      .single()
+
+    if (updateError) {
+      console.error('Error updating product:', updateError)
+      return NextResponse.json(
+        { error: 'Failed to update product: ' + updateError.message },
+        { status: 500 }
+      )
+    }
+
+    // Log the stock change so it shows up in inventory history
+    const previousQuantity = existing.quantity ?? 0
+    const newQuantity = updated.quantity ?? 0
+    if (quantity !== undefined && newQuantity !== previousQuantity) {
+      await supabase
+        .schema('armadillo_inventory')
+        .from('inventory_history')
+        .insert({
+          sku,
+          quantity_change: newQuantity - previousQuantity,
+          quantity_after: newQuantity,
+          source: 'manual',
+          user_id: user.id,
+          user_email: user.email
+        })
+
+      try {
+        await checkLowStockAlerts()
+      } catch (alertError) {
+        console.error('Error checking alerts after product update:', alertError)
+      }
+    }
 
     let shopifySync = null
     if (quantity !== undefined) {
       shopifySync = await syncSkuQuantityToShopify({
         sku,
-        quantity: Number(quantity) || 0,
+        quantity: Number(newQuantity) || 0,
       })
     }
 
+    const parsedSku = parseSkuToProduct(updated.sku || sku)
+
     // Return updated product
     const response = {
-      id: productData.sku,
-      name: productData.name,
-      description: productData.description,
-      sku: productData.sku,
-      price: parseFloat(productData.price),
-      color: productData.color,
-      leadtime: productData.leadtime,
-      inventory: inventoryData && inventoryData.length > 0 ? {
-        quantity: inventoryData[0].quantity || 0
-      } : null,
+      id: updated.sku,
+      name: parsedSku.valid && parsedSku.title ? parsedSku.title : `Product ${updated.sku}`,
+      description: updated.description ?? null,
+      sku: updated.sku,
+      price: updated.price !== null && updated.price !== undefined ? parseFloat(updated.price) : 0,
+      color: updated.color ?? parsedSku.colorName ?? null,
+      leadtime: updated.leadtime ?? null,
+      inventory: {
+        quantity: newQuantity,
+        minStock: updated.min_stock ?? null,
+        location: updated.location ?? null,
+        lastUpdated: updated.updated_at ?? null,
+      },
       shopifySync
     }
 

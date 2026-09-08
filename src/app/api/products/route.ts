@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase, supabaseAdmin } from '@/lib/supabase'
 import { getProducts as getShopifyProducts, getProduct as getShopifyProduct } from '@/lib/shopify'
 import { getDefaultShopifyCredentials } from '@/lib/shopify-connection'
+import { parseSkuToProduct } from '@/lib/sku-parser'
 
 export async function GET(request: NextRequest) {
   try {
@@ -53,39 +54,49 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(transformedProducts)
     }
 
-    // Default: fetch from Supabase
-    let products
-    let error
+    // Default: fetch from armadillo_inventory.inventory (product details live there;
+    // the old get_products / get_product_by_sku RPCs pointed at a products table
+    // that does not exist).
+    let query = supabase
+      .schema('armadillo_inventory')
+      .from('inventory')
+      .select('*')
 
     if (sku) {
-      // Get single product by SKU using RPC
-      const { data, error: rpcError } = await supabase.rpc('get_product_by_sku', {
-        product_sku: sku
-      })
-      products = data
-      error = rpcError
-    } else {
-      // Get all products using RPC
-      const { data, error: rpcError } = await supabase.rpc('get_products')
-      products = data
-      error = rpcError
+      query = query.eq('sku', sku)
     }
+
+    const { data: products, error } = await query
 
     if (error) throw error
 
     // Transform data to match expected format
-    const transformedProducts = products?.map((product: any) => ({
-      id: product.sku, // Using SKU as ID since there's no id column
-      name: product.name,
-      description: product.description,
-      sku: product.sku,
-      price: parseFloat(product.price),
-      color: product.color,
-      leadtime: product.leadtime,
-      source: 'local',
-      inventory: null, // Inventory is tracked separately in armadillo_inventory.inventory table
-      orderItems: []
-    })) || []
+    const transformedProducts = products?.map((product: any) => {
+      // Legacy rows store a UUID in `name`; prefer the SKU-derived title like the
+      // inventory endpoints do.
+      const parsedSku = parseSkuToProduct(product.sku || '')
+      const dbName = product.name
+      const isUuid = dbName && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dbName)
+      const name = parsedSku.valid && parsedSku.title
+        ? parsedSku.title
+        : (!isUuid && dbName ? dbName : `Product ${product.sku}`)
+
+      return {
+        id: product.sku, // Using SKU as ID since there's no id column
+        name,
+        description: product.description ?? null,
+        sku: product.sku,
+        price: product.price !== null && product.price !== undefined ? parseFloat(product.price) : 0,
+        color: product.color ?? parsedSku.colorName ?? null,
+        leadtime: product.leadtime ?? null,
+        source: 'local',
+        inventory: {
+          quantity: product.quantity ?? 0,
+          lastUpdated: product.updated_at ?? null,
+        },
+        orderItems: []
+      }
+    }) || []
 
     if (sku) {
       return NextResponse.json({ products: transformedProducts })

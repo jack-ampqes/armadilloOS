@@ -897,6 +897,52 @@ export async function setInventory(
   return data.inventory_level;
 }
 
+/**
+ * Writes the Armabase SKU onto a Shopify variant so future syncs can match on
+ * SKU directly instead of inferring from titles. As of API 2026-01 the SKU
+ * lives on the variant's inventory item.
+ */
+export async function updateVariantSku(
+  productId: string | number,
+  variantId: string | number,
+  sku: string,
+  credentials?: ShopifyApiCredentials
+): Promise<{ id: string; sku: string | null }> {
+  const data = await shopifyGraphQL<{
+    productVariantsBulkUpdate: {
+      productVariants: Array<{ id: string; inventoryItem: { sku: string | null } }>;
+      userErrors: Array<{ field: string[] | null; message: string }>;
+    };
+  }>(
+    `mutation UpdateVariantSku($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+        productVariants { id inventoryItem { sku } }
+        userErrors { field message }
+      }
+    }`,
+    {
+      productId: `gid://shopify/Product/${productId}`,
+      variants: [
+        {
+          id: `gid://shopify/ProductVariant/${variantId}`,
+          inventoryItem: { sku },
+        },
+      ],
+    },
+    credentials
+  );
+
+  const result = data.productVariantsBulkUpdate;
+  if (result.userErrors.length > 0) {
+    throw new Error(
+      `Failed to set SKU on variant ${variantId}: ${result.userErrors.map((e) => e.message).join(', ')}`
+    );
+  }
+
+  const updated = result.productVariants[0];
+  return { id: updated.id, sku: updated.inventoryItem.sku };
+}
+
 export async function getInventoryItem(
   inventoryItemId: string | number,
   credentials?: ShopifyApiCredentials

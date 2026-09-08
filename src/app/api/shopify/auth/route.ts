@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   const appUrl = process.env.SHOPIFY_APP_URL
   const scopes =
     process.env.SHOPIFY_APP_SCOPES ||
-    'read_orders,read_products,read_inventory,read_customers'
+    'read_orders,read_products,read_inventory,write_inventory,read_locations,read_customers'
 
   if (!apiKey) {
     return NextResponse.json(

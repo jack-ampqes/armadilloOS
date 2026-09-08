@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Pencil, AlertTriangle, RefreshCw, Minus, PackagePlus, Search, X, History } from 'lucide-react'
+import { Plus, Pencil, AlertTriangle, RefreshCw, Minus, PackagePlus, Search, X, History, Store } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -443,11 +443,18 @@ export default function InventoryPage() {
           )}
 
           {hasPermission('InventoryEditing') && (
-            <Button asChild size="icon">
-              <Link href="/inventory/new" title="Add Product">
-                <Plus size={20} aria-hidden="true" />
-              </Link>
-            </Button>
+            <>
+              <Button variant="outline" asChild>
+                <Link href="/inventory/shopify-sync">
+                  <Store size={20} aria-hidden="true" /> Shopify Sync
+                </Link>
+              </Button>
+              <Button asChild size="icon">
+                <Link href="/inventory/new" title="Add Product">
+                  <Plus size={20} aria-hidden="true" />
+                </Link>
+              </Button>
+            </>
           )}
           
         </div>
